@@ -1,0 +1,6 @@
+2004-10-08
+
+	- Moved to namespace HTTP::OAI
+	- Changed all arguments from -style to 'argument'
+	- Now uses (in a round-about way) XML::SAX, dropping the requirement for XML::Parser and XML::SAX::PerlSAX
+	- Fixed some bugs with the DOM construction code (which also effected toString)

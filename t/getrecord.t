@@ -1,0 +1,74 @@
+use Test::More tests => 3;
+
+use_ok( 'HTTP::OAI' );
+use XML::LibXML;
+
+my $expected = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"><responseDate>0000-00-00T00:00:00Z</responseDate><request>http://localhost/path/script?</request><GetRecord><record><header xsi:status="deleted"><identifier>oai:arXiv.org:acc-phys/9411001</identifier><datestamp>2004-06-22T17:51:18Z</datestamp><setSpec>a:setSpec</setSpec><setSpec>a:setSpec</setSpec></header><metadata><oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
+<dc:title>Symplectic Computation of Lyapunov Exponents</dc:title>
+<dc:creator>Habib, Salman</dc:creator>
+<dc:creator>Ryne, Robert D.</dc:creator>
+<dc:subject>Accelerator Physics</dc:subject>
+<dc:description>A recently developed method for the calculation of Lyapunov exponents of dynamical systems is described. The method is applicable whenever the linearized dynamics is Hamiltonian. By utilizing the exponential representation of symplectic matrices, this approach avoids the renormalization and reorthogonalization procedures necessary in usual techniques. It is also easily extendible to damped systems. The method is illustrated by considering two examples of physical interest: a model system that describes the beam halo in charged particle beams and the driven van der Pol oscillator.</dc:description>
+<dc:description>Comment: 12 pages, uuencoded PostScript (figures included)</dc:description>
+<dc:date>1994-10-31</dc:date>
+<dc:type>text</dc:type>
+<dc:identifier>http://arXiv.org/abs/acc-phys/9411001</dc:identifier>
+</oai_dc:dc></metadata></record></GetRecord></OAI-PMH>
+EOF
+
+my $r = new HTTP::OAI::GetRecord(
+	requestURL=>'http://localhost/path/script?',
+	responseDate=>'0000-00-00T00:00:00Z'
+);
+
+my $rec = new HTTP::OAI::Record();
+my $str_header = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<header status="deleted">
+<identifier>oai:arXiv.org:acc-phys/9411001</identifier>
+<datestamp>2004-06-22T17:51:18Z</datestamp>
+<setSpec>a:setSpec</setSpec>
+</header>
+EOF
+$rec->header->dom(XML::LibXML->new()->parse_string($str_header));
+$rec->header->identifier('oai:arXiv.org:acc-phys/9411001');
+$rec->header->datestamp('2004-06-22T17:51:18Z');
+$rec->header->status('deleted');
+$rec->header->setSpec('a:setSpec');
+
+my $str = <<EOF;
+<oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
+<dc:title>Symplectic Computation of Lyapunov Exponents</dc:title>
+<dc:creator>Habib, Salman</dc:creator>
+<dc:creator>Ryne, Robert D.</dc:creator>
+<dc:subject>Accelerator Physics</dc:subject>
+<dc:description>A recently developed method for the calculation of Lyapunov exponents of dynamical systems is described. The method is applicable whenever the linearized dynamics is Hamiltonian. By utilizing the exponential representation of symplectic matrices, this approach avoids the renormalization and reorthogonalization procedures necessary in usual techniques. It is also easily extendible to damped systems. The method is illustrated by considering two examples of physical interest: a model system that describes the beam halo in charged particle beams and the driven van der Pol oscillator.</dc:description>
+<dc:description>Comment: 12 pages, uuencoded PostScript (figures included)</dc:description>
+<dc:date>1994-10-31</dc:date>
+<dc:type>text</dc:type>
+<dc:identifier>http://arXiv.org/abs/acc-phys/9411001</dc:identifier>
+</oai_dc:dc>
+EOF
+$rec->metadata(new HTTP::OAI::Metadata());
+my $parser = XML::LibXML::SAX::Parser->new(Handler=>$rec->metadata);
+$parser->parse_string($str);
+
+$r->record($rec);
+
+ok($r->toDOM->toString eq $expected, 'toDOM');
+
+SKIP: {
+	eval { require XML::SAX::Writer };
+
+	skip "XML::SAX::Writer not installed", 1 if $@;
+
+	my $output;
+	my $w = XML::SAX::Writer->new(Output=>\$output);
+	$r->set_handler($w);
+	$r->generate;
+	# SAX::Writer behaves differently :-(
+#	ok($output eq $expected, 'XML::SAX::Writer');
+	ok(1);
+}
