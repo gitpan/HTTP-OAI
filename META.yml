@@ -1,12 +1,16 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         HTTP-OAI
-version:      3.03
+version:      3.04
 version_from: lib/HTTP/OAI/Harvester.pm
 installdirs:  site
 requires:
     File::Temp:                    0.14
+    HTTP::Request:                 0.1
+    HTTP::Response:                0.1
+    LWP::UserAgent:                0.1
     Term::ReadKey:                 0.1
+    Test::More:                    0.1
     URI:                           0.1
     XML::LibXML:                   1.58
     XML::SAX::Base:                1

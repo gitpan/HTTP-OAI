@@ -1,3 +1,7 @@
+2005-03-05
+
+	- 80network.t && added Prereqs (jaybonci@debian.org RT #11508 & #11509)
+
 2005-02-25
 
 	- Added new script 'gateway.pl' that acts as a static repository broker

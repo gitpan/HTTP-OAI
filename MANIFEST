@@ -38,4 +38,4 @@ t/getrecord.t
 t/identify.t
 t/listidentifiers.t
 t/listmetadataformats.t
-t/network.t
+t/80network.t

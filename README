@@ -36,7 +36,8 @@ Installation
 	make test
 	make install
 
-You need to be connected to the Web for the network tests.
+To disable the network tests use:
+export SKIP_HTTP_OAI_NETTESTS=1
 
 Use the following to view the root documentation:
 
