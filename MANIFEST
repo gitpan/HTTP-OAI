@@ -25,7 +25,7 @@ examples/getrecord.xml
 examples/identify.xml
 examples/repository.xml
 README
-bin/gateway.pl
+bin/oai_static_gateway.pl
 bin/oai_browser.pl
 MANIFEST
 Makefile.PL

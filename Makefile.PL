@@ -4,6 +4,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
 	NAME		=> 'HTTP-OAI',
 	VERSION_FROM	=> 'lib/HTTP/OAI/Harvester.pm',
+	EXE_FILES	=> [ qw( bin/oai_browser.pl ) ],
 	PREREQ_PM	=> {
 				'XML::LibXML' => 1.58,
 				'XML::SAX::Base' => 1.00,

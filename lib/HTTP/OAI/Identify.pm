@@ -103,7 +103,6 @@ sub end_element {
 	} elsif( $elem eq 'compression' ) {
 		$self->compression($text);
 	} elsif( $elem eq 'baseURL' ) {
-		$text .= '/' if $text =~ /^https?:\/\/[^\/]+$/;
 		$self->baseURL($text);
 	} elsif( $elem eq 'protocolVersion' ) {
 		$text = '2.0' if $text =~ /\D/ or $text < 2.0;

@@ -5,7 +5,7 @@ use 5.005; # 5.004 seems to have problems with use base
 use vars qw( @ISA $AUTOLOAD $VERSION );
 use Carp;
 
-$VERSION = '3.02';
+$VERSION = '3.03';
 
 use HTTP::OAI::UserAgent;
 @ISA = qw( HTTP::OAI::UserAgent );
@@ -40,6 +40,7 @@ sub new {
 		$args{repository} ||
 		HTTP::OAI::Identify->new(baseURL=>$args{baseURL});
 	croak "Requires repository or baseURL" unless $self->repository && $self->repository->baseURL;
+	$self->baseURL($self->baseURL);
 
 	return $self;
 }
@@ -51,10 +52,27 @@ sub resume {
 
 sub repository {
 	my $self = shift;
-	return @_ ? $self->{repository} = shift : $self->{repository};
+	return $self->{repository} unless @_;
+	my $id = shift;
+	# Don't clobber a good existing base URL with a bad one
+	if( $self->{repository} && $self->{repository}->baseURL ) {
+		my $uri = URI->new($id->baseURL);
+		if( $uri && $uri->scheme ) {
+			$id->baseURL($uri->canonical);
+		} else {
+			carp "Ignoring attempt to use an invalid base URL: " . $id->baseURL;
+			$id->baseURL($self->baseURL);
+		}
+	}
+	return $self->{repository} = $id;
 }
 
-sub baseURL { shift->repository->baseURL(@_); }
+sub baseURL {
+	my $self = shift;
+	return @_ ? 
+		$self->repository->baseURL(URI->new(shift)->canonical) :
+		$self->repository->baseURL();
+}
 
 sub version { shift->repository->version(@_); }
 
