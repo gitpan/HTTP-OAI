@@ -111,9 +111,11 @@ sub parse_file {
 	my $handler = new HTTP::OAI::SAXHandler();
 	$handler->set_handler($self->headers);
 	$self->headers->set_handler($self);
-	my $parser = XML::LibXML::SAX->new(Handler=>$handler);
+	my $parser = XML::LibXML::SAX::Parser->new(Handler=>$handler);
 
 	eval { $parser->parse_file($fh) };
+
+	$self->headers->set_handler(undef); # Otherwise we memory leak!
 
 	if( $@ ) {
 		$self->code(600);
@@ -143,6 +145,9 @@ sub parse_string {
 		my $parser = XML::LibXML::SAX->new(Handler=>$handler);
 
 		eval { $parser->parse_string($str) };
+		
+		$self->headers->set_handler(undef); # Otherwise we memory leak!
+
 		if( $@ ) {
 			$self->errors(new HTTP::OAI::Error(
 				code=>'parseError',

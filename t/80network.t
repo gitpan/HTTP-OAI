@@ -1,13 +1,19 @@
 #!/usr/bin/perl -w
 
-use strict;
-use HTTP::OAI;
 use Test::More tests => 5;
+
+use strict;
+use warnings;
+
+use HTTP::OAI;
 
 my @repos = qw(
 http://eprints.ecs.soton.ac.uk/perl/oai2
 http://citebase.eprints.org/cgi-bin/oai2
 http://memory.loc.gov/cgi-bin/oai2_0
+);
+@repos = qw(
+http://eprints.ecs.soton.ac.uk/perl/oai2
 );
 
 my $h = HTTP::OAI::Harvester->new(debug=>0,baseURL=>$repos[int(rand(@repos))]);
@@ -36,6 +42,6 @@ SKIP : {
 	ok($r->is_success());
 
 	$r = $h->ListSets();
+warn $r->message if $r->is_error;
 	ok($r->is_success());
-
 }

@@ -8,7 +8,7 @@ require Exporter;
 @ISA = qw(Exporter);
 
 @EXPORT = qw();
-@EXPORT_OK = qw( validate_request &validate_request_1_1 &validate_date &validate_metadataPrefix &validate_responseDate &validate_setSpec );
+@EXPORT_OK = qw( &validate_request &validate_request_1_1 &validate_date &validate_metadataPrefix &validate_responseDate &validate_setSpec );
 %EXPORT_TAGS = (validate=>[qw(&validate_request &validate_date &validate_metadataPrefix &validate_responseDate &validate_setSpec)]);
 
 use HTTP::OAI::Error qw(%OAI_ERRORS);
@@ -30,7 +30,7 @@ my %grammer = (
 		'until' => [0, \&validate_date],
 		'set' => [0, \&validate_setSpec_2_0],
 		'metadataPrefix' => [1, \&validate_metadataPrefix],
-		'resumptionToken' => [2, sub { 1 }]
+		'resumptionToken' => [2, sub { 0 }]
 	},
 	'ListMetadataFormats' =>
 	{
@@ -42,11 +42,11 @@ my %grammer = (
 		'until' => [0, \&validate_date],
 		'set' => [0, \&validate_setSpec_2_0],
 		'metadataPrefix' => [1, \&validate_metadataPrefix],
-		'resumptionToken' => [2, sub { 1 }]
+		'resumptionToken' => [2, sub { 0 }]
 	},
 	'ListSets' =>
 	{
-		'resumptionToken' => [2, sub { 1 }]
+		'resumptionToken' => [2, sub { 0 }]
 	}
 );
 
@@ -80,16 +80,23 @@ sub validate_request_2_0 {
 
 	# Check exclusivity
 	foreach my $arg (keys %$grm) {
-		my ($type, $valid) = @{$grm->{$arg}};
+		my ($type, $valid_func) = @{$grm->{$arg}};
 		next unless ($type == 2 && defined($params{$arg}));
 
-		return (new HTTP::OAI::Error(code=>'badArgument'))
-			unless &$valid($params{$arg});
+		if( my $err = &$valid_func($params{$arg}) ) {
+			return (new HTTP::OAI::Error(
+					code=>'badArgument', 
+					message=>("Bad argument ($arg): " . $err)
+				));
+		}
 
 		delete $params{$arg};
 		if( %params ) {
 			for(keys %params) {
-				push @errors, new HTTP::OAI::Error(code=>'badArgument',message=>"'$_' can not be used in conjunction with $arg");
+				push @errors, new HTTP::OAI::Error(
+					code=>'badArgument',
+					message=>"'$_' can not be used in conjunction with $arg"
+				);
 			}
 			return @errors;
 		} else {
@@ -99,11 +106,12 @@ sub validate_request_2_0 {
 
 	# Check required/optional
 	foreach my $arg (keys %$grm) {
-		my ($type, $valid) = @{$grm->{$arg}};
+		my ($type, $valid_func) = @{$grm->{$arg}};
 
 		if( $params{$arg} ) {
-			return (new HTTP::OAI::Error(code=>'badArgument'))
-				unless &$valid($params{$arg});
+			if( my $err = &$valid_func($params{$arg}) ) {
+				return (new HTTP::OAI::Error(code=>'badArgument',message=>"Bad argument ($arg): " . $err))
+			}
 		}
 		if( $type == 1 && (!defined($params{$arg}) || $params{$arg} eq '') ) {
 			return (new HTTP::OAI::Error(code=>'badArgument',message=>"Required argument '$arg' was undefined"));
@@ -113,7 +121,10 @@ sub validate_request_2_0 {
 
 	if( %params ) {
 		for(keys %params) {
-			push @errors, new HTTP::OAI::Error(code=>'badArgument',message=>"'$_' is not a recognised argument for $verb");
+			push @errors, new HTTP::OAI::Error(
+				code=>'badArgument',
+				message=>"'$_' is not a recognised argument for $verb"
+			);
 		}
 		return @errors;
 	} else {
@@ -129,38 +140,50 @@ sub granularity {
 
 sub validate_date {
 	my $date = shift;
-	return unless $date =~ /^(\d{4})-(\d{2})-(\d{2})(T\d{2}:\d{2}:\d{2}Z)?$/;
+	return "Date not in OAI format (yyyy-mm-dd or yyyy-mm-ddThh:mm:ssZ)" unless $date =~ /^(\d{4})-(\d{2})-(\d{2})(T\d{2}:\d{2}:\d{2}Z)?$/;
 	my( $y, $m, $d ) = ($1,($2||1),($3||1));
-	return if ($m < 1 || $m > 12);
-	return if ($d < 1 || $d > 31);
-	1;
+	return "Month in date is not in range 1-12" if ($m < 1 || $m > 12);
+	return "Day in date is not in range 1-31" if ($d < 1 || $d > 31);
+	0;
 }
 
 sub validate_responseDate {
-	my $dt = shift;
-	return unless $dt =~ /^(\d{4})\-([01][0-9])\-([0-3][0-9])T([0-2][0-9]):([0-5][0-9]):([0-5][0-9])[\+\-]([0-2][0-9]):([0-5][0-9])$/;
-	return 1;
+	return 
+		shift =~ /^(\d{4})\-([01][0-9])\-([0-3][0-9])T([0-2][0-9]):([0-5][0-9]):([0-5][0-9])[\+\-]([0-2][0-9]):([0-5][0-9])$/ ?
+		0 :
+		"responseDate not in OAI format (yyyy-mm-ddThh:mm:dd:ss[+-]hh:mm)";
 }
 
 sub validate_setSpec {
-	my $set = shift;
-	return unless $set =~ /^([A-Za-z0-9])+(:[A-Za-z0-9]+)*$/;
-	1;
+	return 
+		shift =~ /^([A-Za-z0-9])+(:[A-Za-z0-9]+)*$/ ?
+		0 :
+		"Set spec not in OAI format, must match ^([A-Za-z0-9])+(:[A-Za-z0-9]+)*\$";
 }
 
 sub validate_setSpec_2_0 {
-	return shift =~ /([A-Za-z0-9_!'\$\(\)\+\-\.\*])+(:[A-Za-z0-9_!'\$\(\)\+\-\.\*]+)*/;
+	return
+		shift =~ /^([A-Za-z0-9_!'\$\(\)\+\-\.\*])+(:[A-Za-z0-9_!'\$\(\)\+\-\.\*]+)*$/ ?
+		0 :
+		"Set spec not in OAI format, must match ([A-Za-z0-9_!'\\\$\(\\)\\+\\-\\.\\*])+(:[A-Za-z0-9_!'\\$\\(\\)\\+\\-\\.\\*]+)*";
 }
 
 sub validate_metadataPrefix {
-	return shift =~ /^[\w]+$/;
+	return
+		shift =~ /^[\w]+$/ ?
+		0 :
+		"Metadata prefix not in OAI format, must match regexp ^[\\w]+\$";
 }
 
 # OAI 2 requires identifiers by valid URIs
 # This doesn't check for invalid chars, merely <sheme>:<scheme-specific>
 sub validate_identifier {
-	return shift =~ /^[[:alpha:]][[:alnum:]\+\-\.]*:.+/;
+	return
+		shift =~ /^[[:alpha:]][[:alnum:]\+\-\.]*:.+/ ?
+		0 :
+		"Identifier not in OAI format, must match regexp ^[[:alpha:]][[:alnum:]\\+\\-\\.]*:.+";
 }
+
 1;
 
 __END__

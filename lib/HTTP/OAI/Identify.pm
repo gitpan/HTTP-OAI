@@ -9,6 +9,7 @@ use vars qw( @ISA );
 
 sub new {
 	my ($class,%args) = @_;
+	delete $args{'harvestAgent'}; # Otherwise we get a memory cycle with $h->repository($id)!
 	@args{qw( adminEmail compression description )} = ([],[],[]);
 	$args{handlers}->{description} ||= "HTTP::OAI::Metadata";
 	my $self = $class->SUPER::new(%args);

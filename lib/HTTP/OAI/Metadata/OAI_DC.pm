@@ -123,6 +123,9 @@ HTTP::OAI::Metadata::OAI_DC provides a simple interface to parsing and generatin
 		dc=>{title=>['Hello, World!','Hi, World!']},
 	);
 
+	# Prints "Hello, World!"
+	print $md->dc->{title}->[0], "\n";
+
 	my $xml = $md->metadata();
 
 	$md->metadata($xml);

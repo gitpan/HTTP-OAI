@@ -25,7 +25,7 @@ Synopsis
 	while(my $rec = $r->next) {
 		# Check we didn't fail on a resumption token
 		die unless $rec->is_success();
-		print $rec->toString();
+		print $rec->identifier();
 	}
 
 Installation

@@ -79,7 +79,7 @@ warn ref($self)." ".$response->code." ".$response->message." ($filename): " . $r
 			return $response;
 		}
 warn "Waiting $timeout seconds ...\n" if $DEBUG;
-		sleep($timeout+5); # We wait an extra 5 secs for safety
+		sleep($timeout+10); # We wait an extra 5 secs for safety
 		return request($self,@_);
 	# Handle an empty response
 	} elsif( $response->content_length == 0 && $response->is_success ) {
