@@ -136,6 +136,13 @@ sub header {
 	return @_ > 1 ? $self->{field}->{$_[0]} = $_[1] : $self->{field}->{$_[0]};
 }
 
+sub end_document {
+	my $self = shift;
+	unless( defined($self->header('version')) ) {
+		die "Not an OAI-PMH response: No namespace found before end of document";
+	}
+}
+
 sub start_element {
 	my ($self,$hash) = @_;
 	return $self->SUPER::start_element($hash) if $self->{State};

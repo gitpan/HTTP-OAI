@@ -1,3 +1,9 @@
+2005-02-25
+
+	- Added new script 'gateway.pl' that acts as a static repository broker
+	- Library now uses temporary files to harvest (due to memory leak in LibXML's parse_string), provides for a smaller memory footprint
+	- Numerous bug fixes
+
 2005-02-23
 
 	- Added support for harvesting from Static repositories

@@ -6,6 +6,7 @@ use HTTP::Request;
 use HTTP::Response;
 use URI;
 use Carp;
+use File::Temp;
 
 require LWP::UserAgent;
 @ISA = qw(LWP::UserAgent);
@@ -27,43 +28,26 @@ sub new {
 	$self;
 }
 
-# Wrapper methods
-#sub agent { shift->{ua}->agent(@_); }
-#sub simple_request { shift->{ua}->simple_request(@_); }
-#sub redirect_ok { shift->{ua}->redirect_ok(@_); }
-#sub credentials { shift->{ua}->credentials(@_); }
-#sub get_basic_credentials { shift->{ua}->get_basic_credentials(@_); }
-#sub from { shift->{ua}->from(@_); }
-#sub timeout { shift->{ua}->timeout(@_); }
-#sub cookie_jar { shift->{ua}->cookie_jar(@_); }
-#sub parse_head { shift->{ua}->parse_head(@_); }
-#sub max_size { shift->{ua}->max_size(@_); }
-#sub clone { die "Unsupported" }
-#sub is_protocol_supported { shift->{ua}->is_protocol_supported(@_); }
-#sub mirror { shift->{ua}->mirror(@_); }
-#sub proxy { shift->{ua}->proxy(@_); }
-#sub env_proxy { shift->{ua}->env_proxy(@_); }
-#sub no_proxy { shift->{ua}->no_proxy(@_); }
-
 sub redirect_ok { 1 }
 
 sub request {
 	my $self = shift;
-	my %attr;
 	my ($request, $response);
+	my $filename;
 	if( ref $_[0] ) {
-		$request = $_[0];
-	} elsif( (@_ % 2) == 0 ) {
-		%attr = @_;
-		my $url = _buildurl(%attr);
-		$self->prepare_request($request = new HTTP::Request('GET', $url));
+		($request,$filename) = @_;
+	} elsif( @_ > 0 ) {
+		$filename = pop() if( @_ % 2 == 1 );
+		$request = HTTP::Request->new('GET', _buildurl(@_));
 	} else {
-		die "$self->{class}::request Requires either an HTTP::Request object or OAI arguments\n";
+		croak ref($self)."::request Requires either an HTTP::Request object or OAI arguments\n";
 	}
+	$filename ||= File::Temp->new( UNLINK => 1 );
+	$request = $self->prepare_request($request);
 	# Send Accept-Encoding if we have Zlib
 	$request->headers->header('Accept-Encoding',$ACCEPT) if $ACCEPT;
-warn ref($self)."::Requesting " . $request->uri . ":\n" . $request->headers->as_string . "\n" if $DEBUG;
-	eval { $response = $self->SUPER::request($request) };
+warn ref($self)." GET " . $request->uri . ":\n" . $request->headers->as_string . "\n" if $DEBUG;
+	eval { $response = $self->SUPER::request($request,"$filename") };
 	if( $@ ) {
 		if( $@ =~ /read timeout/ ) {
 			$response = new HTTP::Response(504,$@);
@@ -72,15 +56,21 @@ warn ref($self)."::Requesting " . $request->uri . ":\n" . $request->headers->as_
 		}
 		$response->request($request);
 	}
+	$response->{_content_filename} = $filename;
+
 	# Decompress the response
-	decompress($response) if $ACCEPT;
-warn ref($self)."::Response " . $response->request->uri . ":\n" . $response->headers->as_string . "\n" if $DEBUG;
+	$filename = decompress($response) if $ACCEPT;
+
+	# Set the correct content-length
+	$response->content_length(-s $filename);
+
+warn ref($self)." ".$response->code." ".$response->message." ($filename): " . $response->request->uri . ":\n" . $response->headers->as_string . "\n" if $DEBUG;
 
 	# Handle an OAI timeout
 	if( $response->code eq '503' && defined($response->headers->header('Retry-After')) ) {
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
-			warn "OAI::UserAgent::request (retry-after) Given up requesting after 10 retries\n";
+			warn ref($self)."::request (retry-after) Given up requesting after 10 retries\n";
 			return $response;
 		}
 		my $timeout = $response->headers->header('Retry-After');
@@ -88,17 +78,17 @@ warn ref($self)."::Response " . $response->request->uri . ":\n" . $response->hea
 			carp ref($self)." Archive specified an odd duration to wait (\"$timeout\")";
 			return $response;
 		}
-warn "Waiting $timeout seconds...\n" if $DEBUG;
+warn "Waiting $timeout seconds ...\n" if $DEBUG;
 		sleep($timeout+5); # We wait an extra 5 secs for safety
 		return request($self,@_);
 	# Handle an empty response
-	} elsif( length($response->content) == 0 && $response->is_success ) {
+	} elsif( $response->content_length == 0 && $response->is_success ) {
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
-			warn "OAI::UserAgent::request (empty response) Given up requesting after 10 retries\n";
+			warn ref($self)."::request (empty response) Given up requesting after 10 retries\n";
 			return $response;
 		}
-warn "Retrying on empty response...\n" if $DEBUG;
+warn "Retrying on empty response ...\n" if $DEBUG;
 		sleep(5);
 		return request($self,@_);
 	}
@@ -108,15 +98,15 @@ warn "Retrying on empty response...\n" if $DEBUG;
 
 sub _buildurl {
 	my %attr = @_;
-	croak "Requires baseURL" unless $attr{baseURL};
-	croak "Requires verb" unless $attr{verb};
-	my $uri = new URI($attr{baseURL});
-	delete $attr{baseURL};
+	croak "Requires baseURL" unless $attr{'baseURL'};
+	croak "Requires verb" unless $attr{'verb'};
+	my $uri = new URI(delete($attr{'baseURL'}));
 	if( defined($attr{resumptionToken}) && !$attr{force} ) {
 		$uri->query_form(verb=>$attr{'verb'},resumptionToken=>$attr{'resumptionToken'});
 	} else {
 		delete $attr{force};
-		$uri->query_form(%attr);
+		# http://www.cshc.ubc.ca/oai/ breaks if verb isn't first, doh
+		$uri->query_form(verb=>delete($attr{'verb'}),%attr);
 	}
 	return $uri->as_string;
 }
@@ -129,9 +119,20 @@ sub url {
 sub decompress {
 	my ($response) = @_;
 	my $type = $response->headers->header("Content-Encoding");
-	return unless defined($type);
+	return $response->{_content_filename} unless defined($type);
 	if( $type eq 'gzip' ) {
-		$response->content(Compress::Zlib::memGunzip($response->content_ref));
+		my $filename = File::Temp->new( UNLINK => 1 );
+		my $gz = Compress::Zlib::gzopen($response->{_content_filename}, "r") or die $!;
+		my ($buffer,$c);
+		my $fh = IO::File->new($filename,"w");
+		binmode($fh,":utf8");
+		while( ($c = $gz->gzread($buffer)) > 0 ) {
+			print $fh $buffer;
+		}
+		$fh->close();
+		$gz->gzclose();
+		die "Error decompressing gziped response: " . $gz->gzerror() if -1 == $c;
+		return $response->{_content_filename} = $filename;
 	} else {
 		die "Unsupported compression returned: $type\n";
 	}

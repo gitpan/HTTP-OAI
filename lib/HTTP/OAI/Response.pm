@@ -77,6 +77,7 @@ sub initialize_HTTPresponse {
 	my ($self, $r) = @_;
 
 	$self->{_content} = ${$r->content_ref};
+	$self->{_content_filename} = $r->{_content_filename};
 	$self->{_headers} = $r->headers;
 
 	$self->code($r->code);
@@ -86,7 +87,7 @@ sub initialize_HTTPresponse {
 
 	return if $self->is_error;
 
-	if( length($self->content) == 0 ) {
+	if( $self->content_length == 0 ) {
 		$self->code(600);
 		$self->message('The server response didn\'t contain anything');
 		$self->errors(
@@ -97,7 +98,38 @@ sub initialize_HTTPresponse {
 	} else {
 		my %args = URI->new($self->request->uri)->query_form;
 		$self->headers->header('_args',\%args); # Used to parse static repositories (which the Headers filter for)
-		$self->parse_string($self->content);
+	
+		my $fh = IO::File->new($self->{_content_filename},"r") or die "Unable to open downloaded response for reading ($fn): $!";
+		$self->parse_file($fh);
+		$fh->close;
+	}
+}
+
+sub parse_file {
+	my ($self, $fh) = @_;
+
+	my $handler = new HTTP::OAI::SAXHandler();
+	$handler->set_handler($self->headers);
+	$self->headers->set_handler($self);
+	my $parser = XML::LibXML::SAX->new(Handler=>$handler);
+
+	eval { $parser->parse_file($fh) };
+
+	if( $@ ) {
+		$self->code(600);
+		my $msg = $@;
+		$msg =~ s/^\s+//s;
+		$msg =~ s/\s+$//s;
+		if( $self->request ) {
+			$msg = "Error parsing XML from " . $self->request->uri . " " . $msg;
+		} else {
+			$msg = "Error parsing XML from string: $msg\n";
+		}
+		$self->message($msg);
+		$self->errors(new HTTP::OAI::Error(
+				code=>'parseError',
+				message=>$msg
+			));
 	}
 }
 
@@ -137,10 +169,14 @@ sub parse_string {
 	}
 }
 
+sub harvestAgent {
+	return shift->{harvestAgent};
+}
+
 # Resume a request using a resumptionToken
 sub resume {
 	my ($self,%args) = @_;
-	my $ha = $args{harvestAgent} || $self->{harvestAgent} || croak ref($self)."::resume Required argument harvestAgent is undefined";
+	my $ha = $args{harvestAgent} || $self->harvestAgent || croak ref($self)."::resume Required argument harvestAgent is undefined";
 	my $token = $args{resumptionToken} || croak ref($self)."::resume Required argument resumptionToken is undefined";
 	my $verb = $args{verb} || $self->verb || croak ref($self)."::resume Required argument verb is undefined";
 

@@ -31,6 +31,8 @@ sub new {
 	$self;
 }
 
+sub dc { shift->{dc} }
+
 sub _oai_dc_dom {
 	my $dom = XML::LibXML->createDocument();
 	$dom->setDocumentElement(my $dc = $dom->createElement('oai_dc:dc'));
@@ -46,10 +48,19 @@ sub metadata {
 	return $self->dom() unless @_;
 	my $md = shift or return $self->dom(undef);
 #	unless(my @nodes = $md->findnodes("*/*[local-name()='oai_dc' and namespace:uri()='http://purl.org/dc/elements/1.1/']")) {
-	my ($oai_dc) = $md->getElementsByTagNameNS('http://www.openarchives.org/OAI/2.0/oai_dc/','dc');
-	$oai_dc ||= $md->getElementsByTagNameNS('http://purl.org/dc/elements/1.1/','oai_dc');
-	unless( defined($md) ) {
-		die "Unable to locate OAI Dublin Core in:\n".$oai_dc->toString;
+	my $oai_dc;
+	foreach my $nameSpace (qw(
+		http://www.openarchives.org/OAI/2.0/oai_dc/
+		http://purl.org/dc/elements/1.1/
+	)) {
+		foreach my $tagName (qw(dc oai_dc)) {
+			($oai_dc) = $md->getElementsByTagNameNS($nameSpace,$tagName);
+			last if $oai_dc;
+		}
+		last if $oai_dc;
+	}
+	unless( defined($oai_dc) ) {
+		die "Unable to locate OAI Dublin Core in:\n".$md->toString;
 		return $self->dom(undef);
 	}
 	$md = $oai_dc;
@@ -71,7 +82,7 @@ sub toString {
 	my $str = "Open Archives Initiative Dublin Core (".ref($self).")\n";
 	foreach my $term ( @DC_TERMS ) {
 		for(@{$self->{dc}->{$term}}) {
-			$str .= "$term:\t$_\n";
+			$str .= sprintf("%s:\t%s\n", $term, $_||'');
 		}
 	}
 	$str;

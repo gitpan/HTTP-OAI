@@ -6,6 +6,8 @@ BEGIN {
 
 use vars qw($VERSION $PROTOCOL_VERSION $h);
 
+use lib "../lib";
+
 use HTTP::OAI;
 
 $VERSION = $HTTP::OAI::Harvester::VERSION;
@@ -22,9 +24,7 @@ use strict;
 use utf8;
 #use sigtrap qw( die INT ); # This is just confusing ...
 
-binmode(STDOUT,":iso-8859-1");
-
-use lib "../lib";
+binmode(STDOUT,":encoding(iso-8859-1)");
 
 use Getopt::Long;
 use Term::ReadLine;
@@ -36,7 +36,7 @@ use HTTP::OAI::Metadata::OAI_DC;
 print <<EOF;
 Welcome to the Open Archives Browser $VERSION
 
-Copyright 2004 Tim Brody <tdb01r\@ecs.soton.ac.uk>
+Copyright 2005 Tim Brody <tdb01r\@ecs.soton.ac.uk>
 
 Use CTRL+C to quit at any time
 

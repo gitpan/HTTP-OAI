@@ -38,7 +38,7 @@ sub next {
 	my $self = shift;
 	my $value = shift @{$self->{record}};
 	return $value if $value;
-	return undef if (!$self->{'resume'} || !$self->resumptionToken || $self->resumptionToken->is_empty);
+	return undef if (!$self->harvestAgent->resume || !$self->resumptionToken || $self->resumptionToken->is_empty);
 
 	my $r = $self->resume(resumptionToken=>$self->resumptionToken);
 	return $r->is_success ? $self->next : $r;

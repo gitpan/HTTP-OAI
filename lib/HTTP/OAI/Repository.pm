@@ -241,3 +241,7 @@ Note that validate_request attempts to be as strict to the Protocol as possible.
 These functions, exported by the Repository module, validate the given type of OAI data. Returns true if the given value is sane, false otherwise.
 
 =back
+
+=head1 EXAMPLE
+
+See the bin/gateway.pl for an example implementation (it's actually for creating a static repository gateway, but you get the idea!).

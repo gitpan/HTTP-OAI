@@ -5,7 +5,7 @@ use 5.005; # 5.004 seems to have problems with use base
 use vars qw( @ISA $AUTOLOAD $VERSION );
 use Carp;
 
-$VERSION = '3.01';
+$VERSION = '3.02';
 
 use HTTP::OAI::UserAgent;
 @ISA = qw( HTTP::OAI::UserAgent );
@@ -41,20 +41,6 @@ sub new {
 		HTTP::OAI::Identify->new(baseURL=>$args{baseURL});
 	croak "Requires repository or baseURL" unless $self->repository && $self->repository->baseURL;
 
-	# Check for a static repository, and store the response if it is
-	my $r = $self->request(HTTP::Request->new(GET => $self->baseURL));
-	# Fake the request as if it's a normal repository
-	# Static repository parsing relies upon a hack where the arguments are
-	# retrieved from the request uri
-	my $uri = URI->new($self->baseURL);
-	$uri->query_form(verb=>'Identify');
-	$r->request->uri("$uri");
-	my $id = HTTP::OAI::Identify->new(HTTPresponse=>$r);
-	if( $id->is_success && $id->version eq '2.0s' ) {
-		$self->repository->version($id->version);
-		$self->{_static} = $r;
-	}
-
 	return $self;
 }
 
@@ -72,11 +58,14 @@ sub baseURL { shift->repository->baseURL(@_); }
 
 sub version { shift->repository->version(@_); }
 
+sub DESTROY {
+	my $self = shift;
+}
+
 sub AUTOLOAD {
 	my $self = shift;
 	my $name = $AUTOLOAD;
 	$name =~ s/.*:://;
-	return if $name eq 'DESTROY';
 #	warn join(',',map { ref($_) || $_ } @_);
 	if($name =~ /GetRecord|Identify|ListIdentifiers|ListMetadataFormats|ListRecords|ListSets/) {
 		my %args = (
@@ -99,22 +88,31 @@ sub AUTOLOAD {
 		for( keys %args ) {
 			delete $args{$_} if !defined($args{$_}) || !length($args{$_});
 		}
-		
+	
+		# Check for a static repository
+		if( !defined($self->repository->version) ) {
+			$self->interogate();
+		}
+
+		if( 'ListIdentifiers' eq $name &&
+			defined($self->repository->version) && 
+			'1.1' eq $self->repository->version ) {
+			delete $args{metadataPrefix};
+		}
+
 		# Fake the request as if it's a normal repository
 		# Static repository parsing relies upon a hack where the arguments are
 		# retrieved from the request uri
-		if( $self->{_static} ) {
+		my $r;
+		if( $r = $self->{_static} ) {
 			my $uri = URI->new($self->baseURL);
 			$uri->query_form(verb=>$name,%args);
-			$self->{_static}->request->uri("$uri");
+			$r->request->uri("$uri");
 		}
 		return "HTTP::OAI::$name"->new(
 			harvestAgent=>$self,
 			handlers=>$handlers,
-			HTTPresponse=>
-				$self->{_static} ?
-					$self->{_static} :
-					$self->request(baseURL=>$self->baseURL,%args),
+			HTTPresponse=>$r ? $r : $self->request(baseURL=>$self->baseURL,%args),
 		);
 	} else {
 		my $superior = "SUPER::$name";
@@ -122,28 +120,26 @@ sub AUTOLOAD {
 	}
 }
 
-sub ListIdentifiers {
+sub interogate {
 	my $self = shift;
-	my %args = @_;
-
-	if( defined $self->repository->version && 
-	    $self->repository->version eq '1.1' && 
-	    defined $args{metadataPrefix} ) {
-		delete $args{metadataPrefix};
-	}
-
-	if( $self->{_static} ) {
-		my $uri = URI->new($self->baseURL);
-		$uri->query_form(verb=>'ListIdentifiers',%args);
-		$self->{_static}->request->uri("$uri");
-	}
-	return HTTP::OAI::ListIdentifiers->new(
+	croak "Requires baseURL" unless $self->baseURL;
+	
+	my $r = $self->request(HTTP::Request->new(GET => $self->baseURL));
+	# Fake the request as if it's a normal repository
+	# Static repository parsing relies upon a hack where the arguments are
+	# retrieved from the request uri
+	my $uri = URI->new($self->baseURL);
+	$uri->query_form(verb=>'Identify');
+	$r->request->uri("$uri");
+	my $id = HTTP::OAI::Identify->new(
 		harvestAgent=>$self,
-		HTTPresponse=>
-				$self->{_static} ?
-					$self->{_static} :
-					$self->request(baseURL=>$self->baseURL,verb=>'ListIdentifiers',%args),
+		HTTPresponse=>$r
 	);
+	if( $id->is_success && $id->version eq '2.0s' ) {
+		$self->repository->version($id->version);
+		$self->{_static} = $r;
+	}
+	return $self->repository->version;
 }
 
 1;
@@ -152,7 +148,7 @@ __END__
 
 =head1 NAME
 
-HTTP::OAI::Harvester - Agent for harvesting from an Open Archives 1.0,1.1, 2.0 and static compatible repositories
+HTTP::OAI::Harvester - Agent for harvesting from Open Archives version 1.0, 1.1, 2.0 and static ('2.0s') compatible repositories
 
 =head1 DESCRIPTION
 
@@ -160,15 +156,21 @@ HTTP::OAI::Harvester provides the front-end to the OAI-PERL library for harvesti
 
 To harvest from an OAI-compliant repository first create the HTTP::OAI::Harvester interface using the baseURL option. It is recommended that you request an Identify from the Repository and use the repository method to update the Identify object used by the harvester.
 
-When making OAI requests the underlying L<HTTP::OAI::UserAgent|HTTP::OAI::UserAgent> module will take care of automatic redirection (error code 302) and retry-after (error code 503).
+When making OAI requests the underlying L<HTTP::OAI::UserAgent|HTTP::OAI::UserAgent> module will take care of automatic redirection (http code 302) and retry-after (http code 503).
 
 OAI flow control (i.e. resumption tokens) is handled transparently by HTTP::OAI::Harvester.
 
 =head2 Static Repository Support
 
-Static repositories are automatically and transparently supported within the existing API. To harvest a static repository specify the repository XML file using the baseURL argument to HTTP::OAI::Harvester. An initial request is made that determines whether the base URL specifies a static repository or a normal OAI 1.x/2.0 CGI repository.
+Static repositories are automatically and transparently supported within the existing API. To harvest a static repository specify the repository XML file using the baseURL argument to HTTP::OAI::Harvester. An initial request is made that determines whether the base URL specifies a static repository or a normal OAI 1.x/2.0 CGI repository. To prevent this initial request state the OAI version using an HTTP::OAI::Identify object e.g.
 
-If a static repository is found the response is cached, and further requests are served by that cache. Static repositories do not support sets. You can determine whether the repository is static by checking the version ($ha->repository->version), which will be "2.0s" for static repositories.
+	$h = HTTP::OAI::Harvester->new(
+		repository=>HTTP::OAI::Identify->new(
+			baseURL => 'http://arXiv.org/oai2',
+			version => '2.0',
+	));
+
+If a static repository is found the response is cached, and further requests are served by that cache. Static repositories do not support sets, and will result in a noSetHierarchy error if you try to use sets. You can determine whether the repository is static by checking the version ($ha->repository->version), which will be "2.0s" for static repositories.
 
 =head1 FURTHER READING
 
@@ -243,51 +245,135 @@ In the examples I use arXiv.org's, and cogprints OAI interfaces. To avoid causin
 		print $rec->identifier, "\t",
 			$rec->datestamp, "\n",
 			$rec->metadata, "\n";
+		print join(',', @{$rec->metadata->dc->{'title'}}), "\n";
 	}
 
 =head1 METHODS
 
 =over 4
 
-=item $h = new HTTP::OAI::Harvester(baseURL=>'http://arXiv.org/oai1',repository=>new OAI::Identify(baseURL=>'http://cogprints.soton.ac.uk/perl/oai')[, resume=>0])
+=item HTTP::OAI::Harvester->new( %params )
 
 This constructor method returns a new instance of HTTP::OAI::Harvester. Requires either an L<HTTP::OAI::Identify|HTTP::OAI::Identify> object, which in turn must contain a baseURL, or a baseURL from which to construct an Identify object.
 
-Any other options are passed to the L<HTTP::OAI::UserAgent|HTTP::OAI::UserAgent> module, and from there to the L<LWP::UserAgent|LWP::UserAgent> module.
+Any other parameters are passed to the L<HTTP::OAI::UserAgent|HTTP::OAI::UserAgent> module, and from there to the L<LWP::UserAgent|LWP::UserAgent> module.
 
-The resume argument controls whether resumptionToken flow control is handled internally. By default this is 1. If flow control is not handled by the library programs should check the resumptionToken method to establish whether there are more records.
+	$h = HTTP::OAI::Harvester->new(
+		baseURL	=>	'http://arXiv.org/oai2',
+		resume=>0, # Suppress automatic resumption
+	)
+	$id = $h->repository();
+	$h->repository($h->Identify);
 
-=item $repo = $h->repository([repo])
+	$h = HTTP::OAI::Harvester->new(
+		HTTP::OAI::Identify->new(
+			baseURL => 'http://arXiv.org/oai2',
+	));
+
+=item $h->repository()
 
 Returns and optionally sets the HTTP::OAI::Identify data used by the Harvester agent.
 
-=item $r = $h->GetRecord(identifier=>'oai:arXiv:hep-th/0001001',metadataPrefix=>'oai_dc')
+=item $h->resume()
 
-=item $r = $h->Identify
+If set to true (default) resumption tokens will automatically be handled by requesting the next partial list.
 
-=item $r = $h->ListIdentifiers(metadataPrefix=>'oai_dc',-from=>'2001-10-01',until=>'2001-10-31',set=>'physics:hep-th',resumptionToken=>'xxx')
+=back
 
-=item $r = $h->ListMetadataFormats(identifier=>'oai:arXiv:hep-th/0001001')
+=head2 OAI-PMH Verbs
 
-=item $r = $h->ListRecords(from=>'2001-10-01',until=>'2001-10-01',set=>'physics:hep-th',metadataPrefix=>'oai_dc',resumptionToken=>'xxx')
-
-=item $r = $h->ListSets(resumptionToken=>'xxx')
-
-These methods perform an OAI request corresponding to their name. The options are specified in the OAI protocol document, with a prepended dash. resumptionToken is exclusive and will override any other options passed to the method.
-
-These methods either return either a:
+These methods return either a:
 
 L<HTTP::Response|HTTP::Response>
 
-If there was a problem making the HTTP request.
-
-Or, a module subclassed from L<HTTP::OAI::Response|HTTP::OAI::Response>, corresponding to the method name (e.g. GetRecord will return L<HTTP::OAI::GetRecord|HTTP::OAI::GetRecord>).
+If there was a problem making the HTTP request, or a module subclassed from L<HTTP::OAI::Response|HTTP::OAI::Response>, corresponding to the method name (e.g. GetRecord will return L<HTTP::OAI::GetRecord|HTTP::OAI::GetRecord>).
 
 Use $r->is_success to determine whether an error occurred.
 
 Use $r->code and $r->message to obtain the error code and a human-readable message. OAI level errors can be retrieved using the $r->errors method.
 
-If the response contained an L<HTTP::OAI::ResumptionToken|HTTP::OAI::ResumptionToken> this can be retrieved using the $r->resumptionToken method.
+If the response contained an L<HTTP::OAI::ResumptionToken|HTTP::OAI::ResumptionToken> this can be retrieved using the $r->resumptionToken method. When enumerating through ListIdentifiers, ListRecords or ListSets you should check $rec->is_success as an error may have occurred while attempted to retrieve the next partial list of matches.
+
+=over 4
+
+=item $h->GetRecord( %params )
+
+Get a single record from the repository identified by identifier, in format metadataPrefix.
+
+	$gr = $h->GetRecord(
+		identifier	=>	'oai:arXiv:hep-th/0001001', # Required
+		metadataPrefix	=>	'oai_dc' # Required
+	);
+	die $gr->message if $gr->is_error;
+	$rec = $gr->next;
+	die $rec->message if $rec->is_error;
+	printf("%s (%s)\n", $rec->identifier, $rec->datestamp);
+	$dom = $rec->metadata->dom;
+
+=item $h->Identify()
+
+Get information about the repository.
+
+	$id = $h->Identify();
+	print join ',', $id->adminEmail;
+
+=item $h->ListIdentifiers( %params )
+
+Retrieve the identifiers, datestamps, sets and deleted status for all records within the specified date range (from/until) and set spec (set). 1.x repositories will only return the identifier. Or, resume an existing harvest by specifying resumptionToken.
+
+	$lr = $h->ListIdentifiers(
+		metadataPrefix	=>	'oai_dc', # Required
+		from		=>		'2001-10-01',
+		until		=>		'2001-10-31',
+		set=>'physics:hep-th',
+	);
+	die $lr->message if $lr->is_error;
+	while($rec = $lr->next)
+	{
+		die $rec->message if $rec->is_error;
+		{ ... do something with $rec ... }
+	}
+
+=item $h->ListMetadataFormats( %params )
+
+List available metadata formats. Given an identifier the repository should only return those metadata formats for which that item can be disseminated.
+
+	$lmdf = $h->ListMetadataFormats(
+		identifier => 'oai:arXiv.org:hep-th/0001001'
+	);
+	die $lmdf->message if $lmdf->is_error;
+	for($lmdf->metadataFormat) {
+		print $_->metadataPrefix, "\n";
+	}
+
+=item $h->ListRecords( %params )
+
+Return full records within the specified date range (from/until), set and metadata format. Or, specify a resumption token to resume a previous partial harvest.
+
+	$lr = $h->ListRecords(
+		metadataPrefix=>'oai_dc', # Required
+		from	=>	'2001-10-01',
+		until	=>	'2001-10-01',
+		set		=>	'physics:hep-th',
+	);
+	die $lr->message if $lr->is_error;
+	while($rec = $lr->next)
+	{
+		die $rec->message if $rec->is_error;
+		{ ... do something with $rec ... }
+	}
+
+=item $r = $h->ListSets( %params )
+
+Return a list of sets provided by the repository. The scope of sets is undefined by OAI-PMH, so therefore may represent any subset of a collection. Optionally provide a resumption token to resume a previous partial request.
+
+	$ls = $h->ListSets();
+	die $ls->message if $ls->is_error;
+	while($set = $ls->next)
+	{
+		die $set->message if $sec->is_error;
+		print $set->setSpec, "\n";
+	}
 
 =back
 

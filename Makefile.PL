@@ -9,6 +9,7 @@ WriteMakefile(
 				'XML::SAX::Base' => 1.00,
 				'URI' => 0.1,
 				'Term::ReadKey' => 0.1,
+				'File::Temp' => 0.14,
 			},
 	dist		=> { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
 );
