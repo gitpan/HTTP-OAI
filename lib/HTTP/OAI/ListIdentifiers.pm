@@ -53,9 +53,10 @@ sub generate_body {
 
 sub start_element {
 	my ($self,$hash) = @_;
-	my $elem = lc($hash->{Name});
+	my $elem = lc($hash->{LocalName});
 	if( $elem eq 'header' ) {
 		$self->identifier(my $header = new HTTP::OAI::Header(version=>$self->version));
+		$self->{Old_handler} = $self->get_handler();
 		$self->set_handler($header);
 	} elsif( $elem eq 'resumptiontoken' ) {
 		$self->resumptionToken(my $rt = new HTTP::OAI::ResumptionToken(version=>$self->version));
@@ -66,9 +67,13 @@ sub start_element {
 
 sub end_element {
 	my ($self,$hash) = @_;
+	my $elem = lc($hash->{LocalName});
 	$self->SUPER::end_element($hash);
+	if( $elem eq 'header' ) {
+		$self->set_handler($self->{Old_handler});
+	}
 	# OAI 1.x
-	if( $self->version < 2.0 && lc($hash->{Name}) eq 'identifier' ) {
+	if( $self->version eq '1.1' && $elem eq 'identifier' ) {
 		$self->identifier(new HTTP::OAI::Header(
 			version=>$self->version,
 			identifier=>$hash->{Text},

@@ -38,7 +38,7 @@ sub generate_body {
 
 sub start_element {
 	my ($self,$hash) = @_;
-	if( lc($hash->{Name}) eq 'metadataformat' ) {
+	if( lc($hash->{LocalName}) eq 'metadataformat' ) {
 		my $mdf = new HTTP::OAI::MetadataFormat();
 		$self->metadataFormat($mdf);
 		$self->set_handler($mdf);

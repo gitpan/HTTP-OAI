@@ -50,13 +50,14 @@ sub generate {
 
 sub start_element {
 	my ($self,$hash) = @_;
-	my $elem = lc($hash->{Name});
+	my $elem = lc($hash->{LocalName});
 	$self->SUPER::start_element($hash);
+die unless $self->version;
 	if( defined($self->get_handler()) ) {
 		if( $elem =~ /header|metadata|about/ ) {
 			$self->{"in_$elem"}++;
 		}
-	} elsif( $elem eq 'record' && $self->version < 2.0 ) {
+	} elsif( $elem eq 'record' && $self->version eq '1.1' ) {
 		$self->status($hash->{Attributes}->{'{}status'}->{Value});
 	} elsif( $elem =~ /header|metadata|about/ ) {
 		$self->set_handler(my $handler = $self->{handlers}->{$elem}->new());
@@ -70,7 +71,7 @@ sub start_element {
 
 sub end_element {
 	my ($self,$hash) = @_;
-	my $elem = lc($hash->{Name});
+	my $elem = lc($hash->{LocalName});
 	if( defined($self->get_handler()) && $elem =~ /header|metadata|about/ ) {
 		if( $self->{"in_$elem"} == $hash->{Depth} ) {
 			$self->SUPER::end_document();
@@ -99,9 +100,10 @@ HTTP::OAI::Record - Encapsulates OAI record XML data
 	$r->header->identifier('oai:myarchive.org:oid-233');
 	$r->header->datestamp('2002-04-01');
 	$r->header->setSpec('all:novels');
+	$r->header->setSpec('all:books');
 
 	$r->metadata(new HTTP::OAI::Metadata(dom=>$md));
-	$r->about(new HTTP::OAI::About(dom=>$ab));
+	$r->about(new HTTP::OAI::Metadata(dom=>$ab));
 
 =head1 METHODS
 
@@ -111,34 +113,16 @@ HTTP::OAI::Record - Encapsulates OAI record XML data
 
 This constructor method returns a new HTTP::OAI::Record object. Optionally set the header, metadata, and add an about.
 
-=item $h = $r->header([HTTP::OAI::Header])
+=item $r->header([HTTP::OAI::Header])
 
 Returns and optionally sets the record header (an L<HTTP::OAI::Header|HTTP::OAI::Header> object).
 
-=item $md = $r->metadata([HTTP::OAI::Metadata])
+=item $r->metadata([HTTP::OAI::Metadata])
 
 Returns and optionally sets the record metadata (an L<HTTP::OAI::Metadata|HTTP::OAI::Metadata> object).
 
-=item @about = $r->about([HTTP::OAI::About])
+=item $r->about([HTTP::OAI::Metadata])
 
-Optionally adds a new About record (an L<HTTP::OAI::About|HTTP::OAI::About> object) and returns a list of about returns.
+Optionally adds a new About record (an L<HTTP::OAI::Metadata|HTTP::OAI::Metadata> object) and returns a list of about returns.
 
 =back
-
-=head1 NOTE
-
-As an experimental feature HTTP::OAI::Record will accept a string for the header, metadata, and about fields (avoiding building an XML::DOM). When strings are used HTTP::OAI::Record does not support the toDOM functionality (you'll get errors).
-
-The purpose behind this is to optimise repositories where headers/metadata/about may be stored as static XML, e.g.
-
-	$res = new HTTP::OAI::ListRecords();
-
-	$r = new HTTP::OAI::Record();
-
-	$r->header($str);
-	$r->metadata($str);
-	$r->about($str);
-
-	$res->record($r);
-
-	my $dom = $res->toDOM(); # This will fail

@@ -5,7 +5,7 @@ use 5.005; # 5.004 seems to have problems with use base
 use vars qw( @ISA $AUTOLOAD $VERSION );
 use Carp;
 
-$VERSION = '3.00';
+$VERSION = '3.01';
 
 use HTTP::OAI::UserAgent;
 @ISA = qw( HTTP::OAI::UserAgent );
@@ -33,13 +33,27 @@ sub new {
 	my $self = $class->SUPER::new(%ARGS);
 
 	$self->{'resume'} = exists($args{resume}) ? $args{resume} : 1;
+	$self->agent('OAI-PERL/'.$VERSION);
 
+	# Record the base URL this harvester instance is associated with
 	$self->{repository} =
 		$args{repository} ||
 		HTTP::OAI::Identify->new(baseURL=>$args{baseURL});
-	croak "Requires repository or baseURL" unless $self->{repository};
+	croak "Requires repository or baseURL" unless $self->repository && $self->repository->baseURL;
 
-	$self->agent('OAI-PERL/'.$VERSION);
+	# Check for a static repository, and store the response if it is
+	my $r = $self->request(HTTP::Request->new(GET => $self->baseURL));
+	# Fake the request as if it's a normal repository
+	# Static repository parsing relies upon a hack where the arguments are
+	# retrieved from the request uri
+	my $uri = URI->new($self->baseURL);
+	$uri->query_form(verb=>'Identify');
+	$r->request->uri("$uri");
+	my $id = HTTP::OAI::Identify->new(HTTPresponse=>$r);
+	if( $id->is_success && $id->version eq '2.0s' ) {
+		$self->repository->version($id->version);
+		$self->{_static} = $r;
+	}
 
 	return $self;
 }
@@ -56,6 +70,8 @@ sub repository {
 
 sub baseURL { shift->repository->baseURL(@_); }
 
+sub version { shift->repository->version(@_); }
+
 sub AUTOLOAD {
 	my $self = shift;
 	my $name = $AUTOLOAD;
@@ -71,7 +87,7 @@ sub AUTOLOAD {
 		delete $args{handlers};
 		if( !$args{force} &&
 			defined($self->repository->version) &&
-			2.0 == $self->repository->version &&
+			'2.0' eq $self->repository->version &&
 			(my @errors = HTTP::OAI::Repository::validate_request(%args)) ) {
 			return new HTTP::OAI::Response(
 				code=>503,
@@ -84,10 +100,21 @@ sub AUTOLOAD {
 			delete $args{$_} if !defined($args{$_}) || !length($args{$_});
 		}
 		
+		# Fake the request as if it's a normal repository
+		# Static repository parsing relies upon a hack where the arguments are
+		# retrieved from the request uri
+		if( $self->{_static} ) {
+			my $uri = URI->new($self->baseURL);
+			$uri->query_form(verb=>$name,%args);
+			$self->{_static}->request->uri("$uri");
+		}
 		return "HTTP::OAI::$name"->new(
 			harvestAgent=>$self,
 			handlers=>$handlers,
-			HTTPresponse=>$self->request(baseURL=>$self->baseURL,%args),
+			HTTPresponse=>
+				$self->{_static} ?
+					$self->{_static} :
+					$self->request(baseURL=>$self->baseURL,%args),
 		);
 	} else {
 		my $superior = "SUPER::$name";
@@ -100,18 +127,22 @@ sub ListIdentifiers {
 	my %args = @_;
 
 	if( defined $self->repository->version && 
-	    $self->repository->version < 2.0 && 
+	    $self->repository->version eq '1.1' && 
 	    defined $args{metadataPrefix} ) {
 		delete $args{metadataPrefix};
 	}
 
+	if( $self->{_static} ) {
+		my $uri = URI->new($self->baseURL);
+		$uri->query_form(verb=>'ListIdentifiers',%args);
+		$self->{_static}->request->uri("$uri");
+	}
 	return HTTP::OAI::ListIdentifiers->new(
 		harvestAgent=>$self,
-		HTTPresponse=>$self->request(
-			baseURL=>$self->baseURL(),
-			verb=>'ListIdentifiers',
-			%args
-		)
+		HTTPresponse=>
+				$self->{_static} ?
+					$self->{_static} :
+					$self->request(baseURL=>$self->baseURL,verb=>'ListIdentifiers',%args),
 	);
 }
 
@@ -121,7 +152,7 @@ __END__
 
 =head1 NAME
 
-HTTP::OAI::Harvester - Agent for harvesting from an Open Archives 1.0,1.1 or 2.0 compatible repositories
+HTTP::OAI::Harvester - Agent for harvesting from an Open Archives 1.0,1.1, 2.0 and static compatible repositories
 
 =head1 DESCRIPTION
 
@@ -132,6 +163,12 @@ To harvest from an OAI-compliant repository first create the HTTP::OAI::Harveste
 When making OAI requests the underlying L<HTTP::OAI::UserAgent|HTTP::OAI::UserAgent> module will take care of automatic redirection (error code 302) and retry-after (error code 503).
 
 OAI flow control (i.e. resumption tokens) is handled transparently by HTTP::OAI::Harvester.
+
+=head2 Static Repository Support
+
+Static repositories are automatically and transparently supported within the existing API. To harvest a static repository specify the repository XML file using the baseURL argument to HTTP::OAI::Harvester. An initial request is made that determines whether the base URL specifies a static repository or a normal OAI 1.x/2.0 CGI repository.
+
+If a static repository is found the response is cached, and further requests are served by that cache. Static repositories do not support sets. You can determine whether the repository is static by checking the version ($ha->repository->version), which will be "2.0s" for static repositories.
 
 =head1 FURTHER READING
 
@@ -145,7 +182,7 @@ In the examples I use arXiv.org's, and cogprints OAI interfaces. To avoid causin
 
 	use HTTP::OAI;
 
-	my $h = new HTTP::OAI::Harvester(-baseURL=>'http://arXiv.org/oai2');
+	my $h = new HTTP::OAI::Harvester(baseURL=>'http://arXiv.org/oai2');
 	my $response = $h->repository($h->Identify)
 	if( $response->is_error ) {
 		print "Error requesting Identify:\n",

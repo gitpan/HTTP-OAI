@@ -125,6 +125,7 @@ warn "start_element=>characters: ".substr($self->{Text}||'',0,40)."...\n" if $DE
 
 warn "start_element: $hash->{Name}\n" if $DEBUG;
 warn "(".Dumper($hash).")\n" if $DEBUG >= 2;
+	$hash->{State} = $self;
 	$hash->{Depth} = ++$self->{Depth};
 	$self->SUPER::start_element($hash);
 }

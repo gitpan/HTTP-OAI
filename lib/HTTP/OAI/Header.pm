@@ -91,7 +91,7 @@ sub generate {
 
 sub end_element {
 	my ($self,$hash) = @_;
-	my $elem = $hash->{Name};
+	my $elem = $hash->{LocalName};
 	my $text = $hash->{Text};
 	if( $elem eq 'identifier' ) {
 		die "HTTP::OAI::Header parse error: Empty identifier\n" unless $text;

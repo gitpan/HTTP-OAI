@@ -1,3 +1,8 @@
+2005-02-23
+
+	- Added support for harvesting from Static repositories
+	- Fixed bug where the error message for an unsupported namespace wasn't getting displayed
+
 2004-10-08
 
 	- Moved to namespace HTTP::OAI

@@ -21,7 +21,7 @@ $DEBUG = 0;
 
 sub new {
 	my ($class,%args) = @_;
-	$DEBUG = 1 if $args{debug};
+	$DEBUG = $args{debug} if $args{debug};
 	delete $args{debug};
 	my $self = $class->SUPER::new(%args);
 	$self;

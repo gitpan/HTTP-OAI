@@ -6,7 +6,9 @@ BEGIN {
 
 use vars qw($VERSION $PROTOCOL_VERSION $h);
 
-$VERSION = '3.00';
+use HTTP::OAI;
+
+$VERSION = $HTTP::OAI::Harvester::VERSION;
 
 use vars qw( @ARCHIVES );
 @ARCHIVES = qw(

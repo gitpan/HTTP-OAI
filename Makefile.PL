@@ -8,6 +8,7 @@ WriteMakefile(
 				'XML::LibXML' => 1.58,
 				'XML::SAX::Base' => 1.00,
 				'URI' => 0.1,
+				'Term::ReadKey' => 0.1,
 			},
 	dist		=> { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
 );

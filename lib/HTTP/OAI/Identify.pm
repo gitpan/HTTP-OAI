@@ -77,7 +77,7 @@ sub generate_body {
 
 sub start_element {
 	my ($self,$hash) = @_;
-	my $elem = lc($hash->{Name});
+	my $elem = lc($hash->{LocalName});
 	$self->SUPER::start_element($hash);
 	if( $elem eq 'description' && !$self->{"in_$elem"} ) {
 		$self->{OLDHandler} = $self->get_handler();
@@ -90,7 +90,7 @@ sub start_element {
 
 sub end_element {
 	my ($self,$hash) = @_;
-	my $elem = $hash->{Name};
+	my $elem = $hash->{LocalName};
 	my $text = $hash->{Text};
 	if( defined($self->get_handler) ) {
 		if( $elem eq 'description' && $self->{"in_$elem"} == $hash->{Depth} ) {

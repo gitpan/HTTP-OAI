@@ -30,6 +30,9 @@ sub new {
 	$args{handlers} ||= {};
 	my $self = bless \%args, ref($class) || $class;
 
+	# Force the version of OAI to try to parse
+	$self->version($args{version});
+
 	# HTTP::Response initialisation
 	if( $args{code} ) {
 		$self->code($args{code});
@@ -92,6 +95,8 @@ sub initialize_HTTPresponse {
 				message=>'The server response didn\'t contain anything'
 			));
 	} else {
+		my %args = URI->new($self->request->uri)->query_form;
+		$self->headers->header('_args',\%args); # Used to parse static repositories (which the Headers filter for)
 		$self->parse_string($self->content);
 	}
 }
@@ -103,7 +108,7 @@ sub parse_string {
 		my $handler = new HTTP::OAI::SAXHandler();
 		$handler->set_handler($self->headers);
 		$self->headers->set_handler($self);
-		my $parser = XML::LibXML::SAX::Parser->new(Handler=>$handler);
+		my $parser = XML::LibXML::SAX->new(Handler=>$handler);
 
 		eval { $parser->parse_string($str) };
 		if( $@ ) {
@@ -244,7 +249,7 @@ sub end_element {
 		));
 		if( $code ne 'noRecordsMatch' ) {
 			$self->verb($elem);
-			$self->code(400);
+			$self->code(600);
 			$self->message("Response contains error(s): " . $self->{errors}->[0]->code . " (" . $self->{errors}->[0]->message . ")");
 		}
 	}

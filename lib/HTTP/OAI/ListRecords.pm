@@ -60,7 +60,7 @@ sub generate_body {
 
 sub start_element {
 	my ($self,$hash) = @_;
-	my $elem = lc($hash->{Name});
+	my $elem = lc($hash->{LocalName});
 	if( $elem eq 'header' ) {
 		if( !$self->{"in_$elem"} || $self->{"in_$elem"} == $hash->{Depth} ) {
 			$self->record(my $header = new HTTP::OAI::Record(
