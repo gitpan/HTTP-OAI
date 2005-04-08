@@ -19,7 +19,7 @@ sub new {
 	$self->identifier($args{identifier}) unless $self->identifier;
 	$self->datestamp($args{datestamp}) unless $self->datestamp;
 	$self->status($args{status}) unless $self->status;
-	$self->{setSpec} = $args{setSpec} || [];
+	$self->{setSpec} ||= $args{setSpec} || [];
 
 	$self;
 }
@@ -91,7 +91,7 @@ sub generate {
 
 sub end_element {
 	my ($self,$hash) = @_;
-	my $elem = $hash->{LocalName};
+	my $elem = lc($hash->{LocalName});
 	my $text = $hash->{Text};
 	if( $elem eq 'identifier' ) {
 		die "HTTP::OAI::Header parse error: Empty identifier\n" unless $text;
@@ -99,10 +99,10 @@ sub end_element {
 	} elsif( $elem eq 'datestamp' ) {
 		warn "HTTP::OAI::Header parse warning: Empty datestamp\n" unless $text;
 		$self->datestamp($text);
-	} elsif( $elem eq 'setSpec' ) {
+	} elsif( $elem eq 'setspec' ) {
 		$self->setSpec($text);
 	} elsif( $elem eq 'header' ) {
-		$self->status($hash->{Attributes}->{status}->{Value});
+		$self->status($hash->{Attributes}->{'{}status'}->{Value});
 	}
 }
 
@@ -145,9 +145,9 @@ Returns and optionally sets the datestamp (OAI 2.0 only).
 
 Returns and optionally sets the status. Status is defined by the OAI protocol to be undef or 'deleted'.
 
-=item $sets = $id->setSpec([$setSpec])
+=item @sets = $id->setSpec([$setSpec])
 
-Returns the list of setSpecs as an array to a reference, and optionally appends a new setSpec, $setSpec (OAI 2.0 only).
+Returns the list of setSpecs and optionally appends a new setSpec, $setSpec (OAI 2.0 only).
 
 =item $dom_fragment = $id->generate()
 

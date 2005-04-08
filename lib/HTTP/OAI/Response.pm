@@ -11,7 +11,8 @@ use POSIX qw/strftime/;
 use Carp;
 use URI;
 
-use CGI;
+use CGI qw/-oldstyle_urls/;
+$CGI::USE_PARAM_SEMICOLON = 0;
 
 use HTTP::OAI::Headers;
 use HTTP::OAI::Error;
@@ -62,7 +63,7 @@ sub new {
 		$self->responseDate(strftime("%Y-%m-%dT%H:%M:%S",gmtime).'Z');
 	}
 	unless( defined($self->requestURL) ) {
-		$self->requestURL(CGI->new()->self_url());
+		$self->requestURL(CGI::self_url());
 	}
 	unless( defined($self->verb) ) {
 		my $verb = ref($self);
@@ -73,48 +74,34 @@ sub new {
 	return $self;
 }
 
-sub initialize_HTTPresponse {
-	my ($self, $r) = @_;
-
-	$self->{_content} = ${$r->content_ref};
-	$self->{_content_filename} = $r->{_content_filename};
+sub copy_from {
+	my ($self,$r) = @_;
 	$self->{_headers} = $r->headers;
 
 	$self->code($r->code);
 	$self->message($r->message);
 	$self->request($r->request);
 	$self->previous($r->previous);
-
-	return if $self->is_error;
-
-	if( $self->content_length == 0 ) {
-		$self->code(600);
-		$self->message('The server response didn\'t contain anything');
-		$self->errors(
-			HTTP::OAI::Error->new(
-				code=>'emptyResponse',
-				message=>'The server response didn\'t contain anything'
-			));
-	} else {
-		my %args = URI->new($self->request->uri)->query_form;
-		$self->headers->header('_args',\%args); # Used to parse static repositories (which the Headers filter for)
 	
-		my $fh = IO::File->new($self->{_content_filename},"r") or die "Unable to open downloaded response for reading ($fn): $!";
-		$self->parse_file($fh);
-		$fh->close;
-	}
+	$self->errors(HTTP::OAI::Error->new(
+		code=>$r->code,
+		message=>$r->message,
+	)) if $r->is_error;
 }
 
 sub parse_file {
 	my ($self, $fh) = @_;
 
-	my $handler = new HTTP::OAI::SAXHandler();
-	$handler->set_handler($self->headers);
+	$self->code(200);
+	$self->message('parse_file');
+	
+	my $parser = XML::LibXML::SAX::Parser->new(
+		Handler=>HTTP::OAI::SAXHandler->new(
+			Handler=>$self->headers
+	));
+
 	$self->headers->set_handler($self);
-	my $parser = XML::LibXML::SAX::Parser->new(Handler=>$handler);
-
 	eval { $parser->parse_file($fh) };
-
 	$self->headers->set_handler(undef); # Otherwise we memory leak!
 
 	if( $@ ) {
@@ -138,15 +125,17 @@ sub parse_file {
 sub parse_string {
 	my ($self, $str) = @_;
 
+	$self->code(200);
+	$self->message('parse_string');
 	do {
-		my $handler = new HTTP::OAI::SAXHandler();
-		$handler->set_handler($self->headers);
-		$self->headers->set_handler($self);
-		my $parser = XML::LibXML::SAX->new(Handler=>$handler);
+		my $parser = XML::LibXML::SAX->new(
+			Handler=>HTTP::OAI::SAXHandler->new(
+				Handler=>$self->headers
+		));
 
+		$self->headers->set_handler($self);
 		eval { $parser->parse_string($str) };
-		
-		$self->headers->set_handler(undef); # Otherwise we memory leak!
+		$self->headers->set_handler(undef);
 
 		if( $@ ) {
 			$self->errors(new HTTP::OAI::Error(
@@ -170,8 +159,9 @@ sub parse_string {
 				code=>'parseError',
 				message=>$msg
 			));
-		return;
 	}
+
+	$self;
 }
 
 sub harvestAgent {
@@ -187,19 +177,17 @@ sub resume {
 
 	my $tries = 5;
 	my $response;
-
+	%args = (
+		baseURL=>$ha->repository->baseURL,
+		verb=>$verb,
+		resumptionToken=>(ref $token ? $token->resumptionToken : $token),
+	);
+	$self->headers->{_args} = \%args;
+	$self->resumptionToken(undef);
 	# Retry the request 5 times (leave a minute between retries)
 	do {
-		$response = $ha->request(
-			baseURL=>$ha->repository->baseURL,
-			verb=>$verb,
-			resumptionToken=>(ref $token ? $token->resumptionToken : $token)
-		);
+		$response = $ha->request(%args, $self);
 	} while( $tries-- && $response->is_error && sleep(60) );
-
-	$self->resumptionToken(undef);
-
-	$self->initialize_HTTPresponse($response);
 
 	if( $self->resumptionToken &&
 		defined($self->resumptionToken->resumptionToken) &&
@@ -237,7 +225,7 @@ sub generate {
 		$self->generate_body();
 		g_end_element($handler,'http://www.openarchives.org/OAI/2.0/',$self->verb,{});
 	}
-	
+
 	$self->headers->generate_end();
 	$handler->end_document();
 }
@@ -265,7 +253,11 @@ sub errors {
 }
 
 sub responseDate { shift->headers->header('responseDate',@_) }
-sub requestURL { shift->headers->header('requestURL',@_) }
+sub requestURL {
+	my $self = shift;
+	$_[0] =~ s/;/&/sg if @_ && $_[0] !~ /&/;
+	$self->headers->header('requestURL',@_)
+}
 sub xslt { shift->headers->header('xslt',@_) }
 
 sub verb { shift->headers->header('verb',@_) }
@@ -326,7 +318,7 @@ HTTP::OAI::Response - An OAI response
 
 =over 4
 
-=item $r = new HTTP::OAI::Response([-responseDate=>$rd][, -requestURL=>$ru])
+=item $r = new HTTP::OAI::Response([responseDate=>$rd][, requestURL=>$ru])
 
 This constructor method returns a new HTTP::OAI::Response object. Optionally set the responseDate and requestURL.
 

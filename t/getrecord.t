@@ -1,11 +1,11 @@
-use Test::More tests => 3;
+use Test::More tests => 7;
 
 use_ok( 'HTTP::OAI' );
 use XML::LibXML;
 
 my $expected = <<EOF;
 <?xml version="1.0" encoding="UTF-8"?>
-<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"><responseDate>0000-00-00T00:00:00Z</responseDate><request>http://localhost/path/script?</request><GetRecord><record><header xsi:status="deleted"><identifier>oai:arXiv.org:acc-phys/9411001</identifier><datestamp>2004-06-22T17:51:18Z</datestamp><setSpec>a:setSpec</setSpec><setSpec>a:setSpec</setSpec></header><metadata><oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"><responseDate>0000-00-00T00:00:00Z</responseDate><request>http://localhost/path/script?</request><GetRecord><record><header xsi:status="deleted"><identifier>oai:arXiv.org:acc-phys/9411001</identifier><datestamp>2004-06-22T17:51:18Z</datestamp><setSpec>a:a</setSpec><setSpec>a:b</setSpec></header><metadata><oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
 <dc:title>Symplectic Computation of Lyapunov Exponents</dc:title>
 <dc:creator>Habib, Salman</dc:creator>
 <dc:creator>Ryne, Robert D.</dc:creator>
@@ -29,14 +29,16 @@ my $str_header = <<EOF;
 <header status="deleted">
 <identifier>oai:arXiv.org:acc-phys/9411001</identifier>
 <datestamp>2004-06-22T17:51:18Z</datestamp>
-<setSpec>a:setSpec</setSpec>
+<setSpec>a:a</setSpec>
+<setSpec>a:b</setSpec>
 </header>
 EOF
 $rec->header->dom(XML::LibXML->new()->parse_string($str_header));
-$rec->header->identifier('oai:arXiv.org:acc-phys/9411001');
-$rec->header->datestamp('2004-06-22T17:51:18Z');
-$rec->header->status('deleted');
-$rec->header->setSpec('a:setSpec');
+ok($rec->header->identifier eq 'oai:arXiv.org:acc-phys/9411001', 'header/identifier');
+ok($rec->header->datestamp eq '2004-06-22T17:51:18Z', 'header/datestamp');
+ok($rec->header->status eq 'deleted', 'header/status');
+my @sets = $rec->header->setSpec;
+ok($sets[0] eq 'a:a', 'header/setSpec');
 
 my $str = <<EOF;
 <oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">

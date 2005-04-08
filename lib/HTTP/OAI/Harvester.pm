@@ -5,7 +5,7 @@ use 5.005; # 5.004 seems to have problems with use base
 use vars qw( @ISA $AUTOLOAD $VERSION );
 use Carp;
 
-$VERSION = '3.05';
+$VERSION = '3.07';
 
 use HTTP::OAI::UserAgent;
 @ISA = qw( HTTP::OAI::UserAgent );
@@ -123,20 +123,14 @@ sub AUTOLOAD {
 			delete $args{metadataPrefix};
 		}
 
-		# Fake the request as if it's a normal repository
-		# Static repository parsing relies upon a hack where the arguments are
-		# retrieved from the request uri
-		my $r;
-		if( $r = $self->{_static} ) {
-			my $uri = URI->new($self->baseURL);
-			$uri->query_form(verb=>$name,%args);
-			$r->request->uri("$uri");
-		}
-		return "HTTP::OAI::$name"->new(
+		my $r = "HTTP::OAI::$name"->new(
 			harvestAgent=>$self,
 			handlers=>$handlers,
-			HTTPresponse=>$r ? $r : $self->request(baseURL=>$self->baseURL,%args),
 		);
+		$r->headers->{_args} = \%args;
+		return $self->{_static} ?
+			$r->parse_string($self->{_static}) :
+			$self->request(baseURL=>$self->baseURL,%args,$r);
 	} else {
 		my $superior = "SUPER::$name";
 		return $self->$superior(@_);
@@ -148,21 +142,13 @@ sub interogate {
 	croak "Requires baseURL" unless $self->baseURL;
 	
 	my $r = $self->request(HTTP::Request->new(GET => $self->baseURL));
-	# Fake the request as if it's a normal repository
-	# Static repository parsing relies upon a hack where the arguments are
-	# retrieved from the request uri
-	my $uri = URI->new($self->baseURL);
-	$uri->query_form(verb=>'Identify');
-	$r->request->uri("$uri");
-	my $id = HTTP::OAI::Identify->new(
-		harvestAgent=>$self,
-		HTTPresponse=>$r
-	);
+	return unless length($r->content);
+	my $id = HTTP::OAI::Identify->new();
+	$id->headers->{_args} = {verb=>'Identify'};
+	$id->parse_string($r->content);
 	if( $id->is_success && $id->version eq '2.0s' ) {
-		$self->repository->version($id->version);
-		$self->{_static} = $r;
+		$self->{_static} = $r->content;
 	}
-	return $self->repository->version;
 }
 
 1;
@@ -270,6 +256,10 @@ In the examples I use arXiv.org's, and cogprints OAI interfaces. To avoid causin
 			$rec->metadata, "\n";
 		print join(',', @{$rec->metadata->dc->{'title'}}), "\n";
 	}
+
+	$I = HTTP::OAI::Identify->new();
+	$I->parse_string($content);
+	$I->parse_file($fh);
 
 =head1 METHODS
 

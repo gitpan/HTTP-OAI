@@ -1,12 +1,12 @@
 package HTTP::OAI::UserAgent;
 
-use vars qw(@ISA $ACCEPT $DEBUG);
+use vars qw(@ISA $ACCEPT $DEBUG $PARSER);
 
 use HTTP::Request;
 use HTTP::Response;
 use URI;
 use Carp;
-use File::Temp;
+use XML::LibXML;
 
 require LWP::UserAgent;
 @ISA = qw(LWP::UserAgent);
@@ -30,76 +30,75 @@ sub new {
 
 sub redirect_ok { 1 }
 
-sub request {
+sub request
+{
 	my $self = shift;
-	my ($request, $response);
-	my $filename;
-	if( ref $_[0] ) {
-		($request,$filename) = @_;
-	} elsif( @_ > 0 ) {
-		$filename = pop() if( @_ % 2 == 1 );
-		$request = HTTP::Request->new('GET', _buildurl(@_));
-	} else {
-		croak ref($self)."::request Requires either an HTTP::Request object or OAI arguments\n";
-	}
-	$filename ||= File::Temp->new( UNLINK => 1 );
-	$request = $self->prepare_request($request);
-	# Send Accept-Encoding if we have Zlib
-	$request->headers->header('Accept-Encoding',$ACCEPT) if $ACCEPT;
-warn ref($self)." GET " . $request->uri . ":\n" . $request->headers->as_string . "\n" if $DEBUG;
-	eval { $response = $self->SUPER::request($request,"$filename") };
+	return $self->SUPER::request(@_) if @_ == 1; # To support interogate
+	my ($request,$response);
+	$response = pop;
+	$request = ref($_[0]) ?
+		$_[0] :
+		HTTP::Request->new(GET => _buildurl(@_));
+		
+	#$HTTP::OAI::SAXHandler::DEBUG = 1;
+	$PARSER = XML::LibXML->new(
+		Handler => HTTP::OAI::SAXHandler->new(
+			Handler => $response->headers
+	));
+	$PARSER->{content_length} = 0;
+	$response->headers->set_handler($response);
+	my $r;
+	eval { $r = $self->SUPER::request($request,\&lwp_callback) };
+	$PARSER->parse_chunk("",1);
 	if( $@ ) {
-		if( $@ =~ /read timeout/ ) {
-			$response = new HTTP::Response(504,$@);
-		} else {
-			$response = new HTTP::Response(500,$@);
-		}
+		$response->code(my $code = $@ =~ /read timeout/ ? 504 : 500);
+		$response->message($@);
 		$response->request($request);
-	}
-	$response->{_content_filename} = $filename;
-
-	# Decompress the response
-	$filename = decompress($response) if $ACCEPT;
-
-	# Set the correct content-length
-	$response->content_length(-s $filename);
-
-warn ref($self)." ".$response->code." ".$response->message." ($filename): " . $response->request->uri . ":\n" . $response->headers->as_string . "\n" if $DEBUG;
-
+		$response->errors(HTTP::OAI::Error->new(
+			code=>$code,
+			message=>$@,
+		));
 	# Handle an OAI timeout
-	if( $response->code eq '503' && defined($response->headers->header('Retry-After')) ) {
+	} elsif( $r->code == 503 && defined(my $timeout = $r->headers->header('Retry-After')) ) {
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
 			warn ref($self)."::request (retry-after) Given up requesting after 10 retries\n";
-			return $response;
+			return $r;
 		}
-		my $timeout = $response->headers->header('Retry-After');
 		if( !$timeout || $timeout < 0 || $timeout > 86400 ) {
-			carp ref($self)." Archive specified an odd duration to wait (\"$timeout\")";
-			return $response;
+			warn ref($self)." Archive specified an odd duration to wait (\"".($timeout||'null')."\")\n";
+			return $r;
 		}
 warn "Waiting $timeout seconds ...\n" if $DEBUG;
 		sleep($timeout+10); # We wait an extra 5 secs for safety
-		return request($self,@_);
+		return $self->request($request,$response);
 	# Handle an empty response
-	} elsif( $response->content_length == 0 && $response->is_success ) {
+	} elsif( $r->is_success && $PARSER->{content_length} == 0 ) {
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
 			warn ref($self)."::request (empty response) Given up requesting after 10 retries\n";
-			return $response;
+			return $r;
 		}
 warn "Retrying on empty response ...\n" if $DEBUG;
 		sleep(5);
-		return request($self,@_);
+		return $self->request($request,$response);
+	} else {
+		$response->copy_from($r);
 	}
-	$self->{recursion} = 0;
-	return $response;
+	undef $PARSER;
+	$response;
+}
+
+sub lwp_callback
+{
+	$PARSER->{content_length} += length($_[0]);
+	$PARSER->parse_chunk($_[0]);
 }
 
 sub _buildurl {
 	my %attr = @_;
-	croak "Requires baseURL" unless $attr{'baseURL'};
-	croak "Requires verb" unless $attr{'verb'};
+	croak "_buildurl requires baseURL" unless $attr{'baseURL'};
+	croak "_buildurl requires verb" unless $attr{'verb'};
 	my $uri = new URI(delete($attr{'baseURL'}));
 	if( defined($attr{resumptionToken}) && !$attr{force} ) {
 		$uri->query_form(verb=>$attr{'verb'},resumptionToken=>$attr{'resumptionToken'});

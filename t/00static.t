@@ -8,7 +8,7 @@ ok(1);
 
 my $repo = HTTP::OAI::Harvester->new(baseURL=>'file:examples/repository.xml',debug=>0);
 ok($repo);
-ok($repo->Identify->baseURL eq 'file:examples/repository.xml');
+ok($repo->Identify->baseURL,'file:examples/repository.xml');
 
 # Identify
 my $id = $repo->Identify;

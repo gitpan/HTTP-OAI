@@ -10,12 +10,15 @@ use vars qw( @ISA );
 sub new {
 	my ($class,%args) = @_;
 	delete $args{'harvestAgent'}; # Otherwise we get a memory cycle with $h->repository($id)!
-	@args{qw( adminEmail compression description )} = ([],[],[]);
+	for(qw( adminEmail compression description )) {
+		$args{$_} ||= [];
+	}
 	$args{handlers}->{description} ||= "HTTP::OAI::Metadata";
 	my $self = $class->SUPER::new(%args);
 
 	$self->verb('Identify') unless $self->verb;
 	$self->baseURL($args{baseURL}) unless $self->baseURL;
+	$self->adminEmail($args{adminEmail}) if !ref($args{adminEmail}) && !$self->adminEmail;
 	$self->protocolVersion($args{protocolVersion} || '2.0') unless $self->protocolVersion;
 	$self->repositoryName($args{repositoryName}) unless $self->repositoryName;
 	$self->earliestDatestamp($args{earliestDatestamp}) unless $self->earliestDatestamp;
@@ -63,7 +66,7 @@ sub generate_body {
 	return unless defined(my $handler = $self->get_handler);
 
 	g_data_element($handler,'http://www.openarchives.org/OAI/2.0/','repositoryName',{},$self->repositoryName);
-	g_data_element($handler,'http://www.openarchives.org/OAI/2.0/','baseURL',{},$self->baseURL);
+	g_data_element($handler,'http://www.openarchives.org/OAI/2.0/','baseURL',{},"".$self->baseURL);
 	g_data_element($handler,'http://www.openarchives.org/OAI/2.0/','protocolVersion',{},$self->protocolVersion);
 	g_data_element($handler,'http://www.openarchives.org/OAI/2.0/','adminEmail',{},$_) for $self->adminEmail;
 	g_data_element($handler,'http://www.openarchives.org/OAI/2.0/','earliestDatestamp',{},$self->earliestDatestamp||'0001-01-01');

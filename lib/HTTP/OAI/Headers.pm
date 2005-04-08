@@ -96,19 +96,25 @@ sub generate_start {
 		$self->header('responseDate')
 	);
 	
-	my $uri = new URI($self->header('requestURL'));
+	my $uri = URI->new($self->header('requestURL'));
 	my $attr;
 	my %QUERY = $uri->query_form;
 	while(my ($key,$value) = each %QUERY) {
-		$attr->{"{}$key"} = {'Name'=>$key,'LocalName'=>$key,'Value'=>$value,'Prefix'=>'','NamespaceURI'=>''};
+		$attr->{"{}$key"} = {
+			'Name'=>$key,
+			'LocalName'=>$key,
+			'Value'=>$value,
+			'Prefix'=>'',
+			'NamespaceURI'=>'',
+		};
 	}
 	g_data_element($handler,
 		'http://www.openarchives.org/OAI/2.0/',
 		'request',
 		$attr,
-		$uri->query ?
+		($uri->query ?
 			substr($uri->as_string(),0,length($uri->as_string())-length($uri->query)-1) :
-			$uri->as_string
+			$uri->as_string)
 	);
 }
 
@@ -138,6 +144,7 @@ sub header {
 
 sub end_document {
 	my $self = shift;
+	$self->set_handler(undef);
 	unless( defined($self->header('version')) ) {
 		die "Not an OAI-PMH response: No namespace found before end of document";
 	}
@@ -162,7 +169,7 @@ sub start_element {
 	}
 	# With a static repository, don't process any headers
 	if( $self->header('version') && $self->header('version') eq '2.0s' ) {
-		my %args = %{$self->header('_args')};
+		my %args = %{$self->{_args}};
 		# ListIdentifiers gets mapped to ListRecords
 		if( 'ListIdentifiers' eq $args{'verb'} &&
 			$elem eq 'ListRecords' &&
@@ -211,7 +218,7 @@ sub end_element {
 	my $text = $hash->{Text};
 	# Static repository, don't process any headers
 	if( $self->header('version') && $self->header('version') eq '2.0s' ) {
-		my %args = %{$self->header('_args')};
+		my %args = %{$self->{_args}};
 		# MetadataPrefix not found
 		if( !$self->{State} &&
 			$elem eq 'Repository' &&
@@ -263,7 +270,7 @@ sub end_element {
 	} elsif( $elem eq 'request' ) {
 		$self->header("request",$text);
 		my $uri = new URI($text);
-		$uri->query_form(map { ($_,$attr->{$_}->{Value}) } keys %$attr);
+		$uri->query_form(map { ($_->{LocalName},$_->{Value}) } values %$attr);
 		$self->header("requestURL",$uri);
 	} else {
 		die "Still in headers, but came across an unrecognised element: $elem";

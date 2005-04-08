@@ -45,6 +45,9 @@ my @mdfs = $h->ListMetadataFormats()->metadataFormat;
 if( $mdp && !grep { $_->metadataPrefix } @mdfs ) {
 	push @errs, new HTTP::OAI::Error(code=>'cannotDisseminateFormat',message=>"Dissemination as '$mdp' is not supported");
 }
+if( param('resumptionToken') ) {
+	push @errs, new HTTP::OAI::Error(code=>'badArgument',message=>'This repository does not support flow-control');
+}
 
 my $r;
 if( @errs ) {

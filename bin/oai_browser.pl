@@ -127,6 +127,9 @@ sub GetRecord {
 		print "identifier => ", $rec->identifier,
 			($rec->status ? " (".$rec->status.") " : ''), "\n",
 			"datestamp => ", $rec->datestamp, "\n";
+		foreach($rec->header->setSpec) {
+			print "setSpec => ", $_, "\n";
+		}
 		print "\nMetadata:\n",
 			$rec->metadata->toString if defined($rec->metadata);
 		print "\nAbout data:\n",
@@ -243,6 +246,9 @@ sub ListRecords {
 			print "\nidentifier => ", $rec->identifier,
 				($rec->status ? " (".$rec->status.") " : ''), "\n",
 				"datestamp => ", $rec->datestamp, "\n";
+			foreach($rec->header->setSpec) {
+				print "setSpec => ", $_, "\n";
+			}
 			print "\nMetadata:\n",
 				($rec->metadata->toString||'(null)') if $rec->metadata;
 			print "\nAbout data:\n",

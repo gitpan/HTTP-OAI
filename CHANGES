@@ -1,3 +1,16 @@
+2005-04-06
+
+	- UserAgent now uses a callback with LWP to parse XML responses, resulting in a much reduced memory footprint
+	- Compression support is removed for the moment
+
+2005-03-30
+
+	- CGI has an annoying habit of return the URL with semi-colons, ::Response now checks for this and acts appropriately
+	- Header was blanking setSpecs when given a dom (corrected POD for setSpec)
+	- Fixed Header missing the record status
+	- Tests added to getrecord.t for parsing Header
+	- oai_static_gateway.pl now throws an error if given a resumption token (which should never occur because it doesn't use Flow-Control)
+
 2005-03-07
 
 	- Fixed undef warning when trying to set the repository to an Identify w/o a base URL
