@@ -5,7 +5,7 @@ use 5.005; # 5.004 seems to have problems with use base
 use vars qw( @ISA $AUTOLOAD $VERSION );
 use Carp;
 
-$VERSION = '3.07';
+$VERSION = '3.08';
 
 use HTTP::OAI::UserAgent;
 @ISA = qw( HTTP::OAI::UserAgent );
@@ -130,7 +130,7 @@ sub AUTOLOAD {
 		$r->headers->{_args} = \%args;
 		return $self->{_static} ?
 			$r->parse_string($self->{_static}) :
-			$self->request(baseURL=>$self->baseURL,%args,$r);
+			$self->request({baseURL=>$self->baseURL,%args},undef,undef,undef,$r);
 	} else {
 		my $superior = "SUPER::$name";
 		return $self->$superior(@_);

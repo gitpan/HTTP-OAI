@@ -70,6 +70,7 @@ sub end_element {
 	my $elem = lc($hash->{LocalName});
 	$self->SUPER::end_element($hash);
 	if( $elem eq 'header' ) {
+		$self->SUPER::end_document();
 		$self->set_handler($self->{Old_handler});
 	}
 	# OAI 1.x

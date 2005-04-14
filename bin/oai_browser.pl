@@ -24,7 +24,7 @@ use strict;
 use utf8;
 #use sigtrap qw( die INT ); # This is just confusing ...
 
-binmode(STDOUT,":encoding(iso-8859-1)");
+#binmode(STDOUT,":encoding(iso-8859-1)"); # Causes Out of memory! errors :-(
 
 use Getopt::Long;
 use Term::ReadLine;
@@ -62,7 +62,7 @@ $TERM->addhistory(@ARCHIVES);
 
 while(1) {
 #	my $burl = input('Enter the base URL to use [http://cogprints.soton.ac.uk/perl/oai2]: ') || 'http://cogprints.soton.ac.uk/perl/oai2';
-	my $burl = $TERM->readline('OAI Base URL to query>','http://cogprints.soton.ac.uk/perl/oai2') or next;
+	my $burl = shift || $TERM->readline('OAI Base URL to query>','http://cogprints.soton.ac.uk/perl/oai2') || next;
 	$h = new HTTP::OAI::Harvester(baseURL=>$burl,debug=>!$SILENT);
 	if( my $r = Identify() ) {
 		$h->repository($r);
@@ -311,7 +311,9 @@ sub iserror {
 	if( $r->is_success ) {
 		return undef;
 	} else {
-		print "An error ", $r->code, " occurred while making the request:\n", $r->message, "\n";
+		print "An error ", $r->code, " occurred while making the request",
+			($r->request ? " (" . $r->request->uri . ") " : ''),
+			":\n", $r->message, "\n";
 		return 1;
 	}
 }

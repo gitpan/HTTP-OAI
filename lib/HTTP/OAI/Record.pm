@@ -51,7 +51,6 @@ sub generate {
 sub start_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
-	$self->SUPER::start_element($hash);
 die unless $self->version;
 	if( defined($self->get_handler()) ) {
 		if( $elem =~ /header|metadata|about/ ) {
@@ -67,11 +66,13 @@ die unless $self->version;
 		$self->SUPER::start_document();
 		$self->{"in_$elem"} = $hash->{Depth};
 	}
+	$self->SUPER::start_element($hash);
 }
 
 sub end_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
+	$self->SUPER::end_element($hash);
 	if( defined($self->get_handler()) && $elem =~ /header|metadata|about/ ) {
 		if( $self->{"in_$elem"} == $hash->{Depth} ) {
 			$self->SUPER::end_document();
@@ -79,7 +80,6 @@ sub end_element {
 		}
 		$self->{"in_$elem"} = undef;
 	}
-	$self->SUPER::end_element($hash);
 }
 
 1;

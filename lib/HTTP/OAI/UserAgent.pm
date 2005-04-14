@@ -2,6 +2,11 @@ package HTTP::OAI::UserAgent;
 
 use vars qw(@ISA $ACCEPT $DEBUG $PARSER);
 
+$DEBUG = 0;
+
+use strict;
+use warnings;
+
 use HTTP::Request;
 use HTTP::Response;
 use URI;
@@ -18,8 +23,6 @@ unless( $@ ) {
 	$ACCEPT = "gzip";
 }
 
-$DEBUG = 0;
-
 sub new {
 	my ($class,%args) = @_;
 	$DEBUG = $args{debug} if $args{debug};
@@ -33,14 +36,11 @@ sub redirect_ok { 1 }
 sub request
 {
 	my $self = shift;
-	return $self->SUPER::request(@_) if @_ == 1; # To support interogate
-	my ($request,$response);
-	$response = pop;
-	$request = ref($_[0]) ?
-		$_[0] :
-		HTTP::Request->new(GET => _buildurl(@_));
-		
-	#$HTTP::OAI::SAXHandler::DEBUG = 1;
+	my ($request, $arg, $size, $previous, $response) = @_;
+	if( ref($request) eq 'HASH' ) {
+		$request = HTTP::Request->new(GET => _buildurl(%$request));
+	}
+	return $self->SUPER::request(@_) unless $response;
 	$PARSER = XML::LibXML->new(
 		Handler => HTTP::OAI::SAXHandler->new(
 			Handler => $response->headers
@@ -48,18 +48,16 @@ sub request
 	$PARSER->{content_length} = 0;
 	$response->headers->set_handler($response);
 	my $r;
-	eval { $r = $self->SUPER::request($request,\&lwp_callback) };
-	$PARSER->parse_chunk("",1);
-	if( $@ ) {
-		$response->code(my $code = $@ =~ /read timeout/ ? 504 : 500);
-		$response->message($@);
-		$response->request($request);
-		$response->errors(HTTP::OAI::Error->new(
-			code=>$code,
-			message=>$@,
-		));
-	# Handle an OAI timeout
-	} elsif( $r->code == 503 && defined(my $timeout = $r->headers->header('Retry-After')) ) {
+	warn "Requesting " . $request->uri . "\n" if $DEBUG;
+	eval {
+		$r = $self->SUPER::request($request,\&lwp_callback);
+		$PARSER->parse_chunk("",1);
+	};
+	$response->headers->set_handler(undef);
+	my $cnt_len = $PARSER->{content_length};
+	undef $PARSER;
+	# OAI retry-after
+	if( defined($r) && $r->code == 503 && defined(my $timeout = $r->headers->header('Retry-After')) ) {
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
 			warn ref($self)."::request (retry-after) Given up requesting after 10 retries\n";
@@ -69,23 +67,32 @@ sub request
 			warn ref($self)." Archive specified an odd duration to wait (\"".($timeout||'null')."\")\n";
 			return $r;
 		}
-warn "Waiting $timeout seconds ...\n" if $DEBUG;
-		sleep($timeout+10); # We wait an extra 5 secs for safety
-		return $self->request($request,$response);
-	# Handle an empty response
-	} elsif( $r->is_success && $PARSER->{content_length} == 0 ) {
+		warn "Waiting $timeout seconds [" . $request->uri . "]\n" if $DEBUG;
+		sleep($timeout+10); # We wait an extra 10 secs for safety
+		return $self->request($request,undef,undef,undef,$response);
+	# Got an empty response
+	} elsif( defined($r) && $r->is_success && $cnt_len == 0 ) {
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
 			warn ref($self)."::request (empty response) Given up requesting after 10 retries\n";
 			return $r;
 		}
-warn "Retrying on empty response ...\n" if $DEBUG;
+		warn "Retrying on empty response [" . $request->uri . "]\n" if $DEBUG;
 		sleep(5);
-		return $self->request($request,$response);
+		return $self->request($request,undef,undef,undef,$response);
+	# An error occurred during parsing
+	} elsif( $@ ) {
+		$response->code(my $code = $@ =~ /read timeout/ ? 504 : 600);
+		$response->message($@);
+		$response->errors(HTTP::OAI::Error->new(
+			code=>$code,
+			message=>$@,
+		));
+	# Otherwise, copy the HTTP::Response
 	} else {
 		$response->copy_from($r);
 	}
-	undef $PARSER;
+	$response->request($request); # Original $request => OAI $response
 	$response;
 }
 

@@ -1,7 +1,8 @@
-print "1..1\n";
+use Test::More tests => 3;
 
 use strict;
 use HTTP::OAI;
+use URI;
 
 my $r = new HTTP::OAI::ListIdentifiers();
 
@@ -14,4 +15,12 @@ chomp($str);
 
 $r->parse_string($str);
 
-print "ok 1\n";
+ok(1);
+
+my $ha = HTTP::OAI::Harvester->new(baseURL=>'http://invalid/');
+$r = $ha->ListRecords(metadataPrefix=>'oai_dc', from=>'2005-01-01');
+my $uri = URI->new($r->request->uri);
+my %args = $uri->query_form;
+ok($args{metadataPrefix} eq 'oai_dc' && $args{'from'} eq '2005-01-01','Request arguments');
+
+ok(1);

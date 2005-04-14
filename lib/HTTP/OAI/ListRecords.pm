@@ -24,6 +24,16 @@ sub new {
 	$self;
 }
 
+sub message {
+	return shift->SUPER::message() if @_ == 1;
+	my ($self,$msg) = @_;
+	if( $msg =~ /^internal error|Input is not proper UTF-8/ && $self->record ) {
+		my @ids = map { $_->identifier } $self->record;
+		$msg = "Parser error near record " . @ids . " [" . (pop(@ids) || pop(@ids) || 'identifier unknown') . "]: " . $msg;
+
+	}
+	return $self->SUPER::message($msg);
+}
 sub resumptionToken { shift->headers->header('resumptionToken',@_) }
 
 sub record {

@@ -1,3 +1,7 @@
+2005-04-08
+
+	- Fixed bug where Header wasn't getting end_element on </header>, resulting in deleted items in ListRecords never being flagged as such
+
 2005-04-06
 
 	- UserAgent now uses a callback with LWP to parse XML responses, resulting in a much reduced memory footprint

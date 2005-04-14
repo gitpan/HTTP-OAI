@@ -83,6 +83,8 @@ sub copy_from {
 	$self->request($r->request);
 	$self->previous($r->previous);
 	
+	$self->content($r->content); # There will be content in the event of an error
+	
 	$self->errors(HTTP::OAI::Error->new(
 		code=>$r->code,
 		message=>$r->message,
@@ -175,7 +177,6 @@ sub resume {
 	my $token = $args{resumptionToken} || croak ref($self)."::resume Required argument resumptionToken is undefined";
 	my $verb = $args{verb} || $self->verb || croak ref($self)."::resume Required argument verb is undefined";
 
-	my $tries = 5;
 	my $response;
 	%args = (
 		baseURL=>$ha->repository->baseURL,
@@ -184,10 +185,16 @@ sub resume {
 	);
 	$self->headers->{_args} = \%args;
 	$self->resumptionToken(undef);
-	# Retry the request 5 times (leave a minute between retries)
+	# Retry the request 3 times (leave a minute between retries)
+	my $tries = 3;
 	do {
-		$response = $ha->request(%args, $self);
-	} while( $tries-- && $response->is_error && sleep(60) );
+		$response = $ha->request(\%args, undef, undef, undef, $self);
+	} while(
+		$tries-- &&
+		$response->is_error &&
+		$response->code ne 600 &&
+		sleep(60)
+	);
 
 	if( $self->resumptionToken &&
 		defined($self->resumptionToken->resumptionToken) &&
@@ -280,7 +287,7 @@ sub end_element {
 			code=>$code,
 			message=>$msg,
 		));
-		if( $code ne 'noRecordsMatch' ) {
+		if( $code !~ '^noRecordsMatch|noSetHierarchy$' ) {
 			$self->verb($elem);
 			$self->code(600);
 			$self->message("Response contains error(s): " . $self->{errors}->[0]->code . " (" . $self->{errors}->[0]->message . ")");

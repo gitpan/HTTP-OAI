@@ -146,7 +146,7 @@ sub end_document {
 	my $self = shift;
 	$self->set_handler(undef);
 	unless( defined($self->header('version')) ) {
-		die "Not an OAI-PMH response: No namespace found before end of document";
+		die "Not an OAI-PMH response: No recognised OAI-PMH namespace found before end of document\n";
 	}
 }
 
@@ -181,7 +181,7 @@ sub start_element {
 			$self->set_error(HTTP::OAI::Error->new(
 					code=>'noSetHierarchy',
 					message=>'Static Repositories do not support sets.'
-			));
+			), 200);
 			$hash->{State}->set_handler(undef);
 		# For GetRecord, perform a ListRecords and then extract
 		# the correct record

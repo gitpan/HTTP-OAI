@@ -1,4 +1,4 @@
-use Test::More tests => 2;
+use Test::More tests => 3;
 
 use strict;
 use warnings;
@@ -16,4 +16,9 @@ my $r = HTTP::OAI::Response->new(
 );
 $r->errors(HTTP::OAI::Error->new(code=>'badVerb',message=>'You didn\'t supply a verb argument'));
 
-ok($r->toDOM->toString eq $expected, '<error> badVerb');
+ok($r->toDOM->toString eq $expected, 'badVerb');
+
+$r = HTTP::OAI::Identify->new();
+$r->parse_string("<?xml version='1.0' encoding='UTF-8'?>\n<root/>");
+
+ok($r->code == 600, 'Chunk xml');

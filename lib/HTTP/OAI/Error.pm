@@ -2,6 +2,12 @@ package HTTP::OAI::Error;
 
 use vars qw(@ISA @EXPORT @EXPORT_OK %EXPORT_TAG);
 
+use vars qw(
+	$PARSER
+);
+
+$PARSER = 600;
+
 use Exporter;
 use HTTP::OAI::Metadata;
 use HTTP::OAI::SAXHandler qw( :SAX );

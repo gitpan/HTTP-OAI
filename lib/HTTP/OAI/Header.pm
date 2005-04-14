@@ -1,6 +1,7 @@
 package HTTP::OAI::Header;
 
 use strict;
+use warnings;
 use POSIX qw/strftime/;
 
 use vars qw(@ISA);
@@ -75,7 +76,7 @@ sub generate {
 					'LocalName'=>'status',
 					'Value'=>$self->status,
 					'Prefix'=>'',
-					'NamespaceURI'=>'http://www.openarchives.org/OAI/2.0/'
+					'NamespaceURI'=>''
 				}
 			});
 	} else {

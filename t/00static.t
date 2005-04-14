@@ -8,7 +8,7 @@ ok(1);
 
 my $repo = HTTP::OAI::Harvester->new(baseURL=>'file:examples/repository.xml',debug=>0);
 ok($repo);
-ok($repo->Identify->baseURL,'file:examples/repository.xml');
+ok($repo->Identify->baseURL eq 'file:examples/repository.xml');
 
 # Identify
 my $id = $repo->Identify;
@@ -35,9 +35,9 @@ ok(@recs && $recs[$#recs]->identifier eq 'oai:perseus:Perseus:text:1999.02.0084'
 
 # ListSets
 my $ls = $repo->ListSets();
-ok($ls->is_error);
+ok($ls->is_success);
 my @errs = $ls->errors;
-ok(@errs && $errs[0]->code eq 'noSetHierarchy');
+ok(@errs && $errs[0]->code eq 'noSetHierarchy','noSetHierarchy');
 
 # GetRecord
 my $gr = $repo->GetRecord(metadataPrefix=>'oai_dc',identifier=>'oai:perseus:Perseus:text:1999.02.0084');
