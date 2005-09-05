@@ -269,7 +269,7 @@ sub ListSets {
 		return if iserror($rec);
 		push @SETS, $rec->setSpec;
 		print "setSpec => ", $rec->setSpec, "\n",
-			"setName => ", $rec->setName, "\n";
+			"setName => ", ($rec->setName||'(null)'), "\n";
 	}
 }
 

@@ -1,3 +1,12 @@
+2005-09-05
+
+	- Added -oldstyle_urls to gateway & doc examples [thanks to Patrick Hochstenbach]
+
+2005-04-13
+
+	- Improved display of errors in the event of XML parsing failure (bad chars etc.)
+	- In the event of bad XML resumption token will not sleep(60) and retry, but simply fail
+
 2005-04-08
 
 	- Fixed bug where Header wasn't getting end_element on </header>, resulting in deleted items in ListRecords never being flagged as such

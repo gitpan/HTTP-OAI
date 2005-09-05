@@ -8,7 +8,7 @@ use strict;
 use HTTP::OAI;
 use HTTP::OAI::Repository qw/:validate/;
 use XML::SAX::Writer;
-use CGI qw/:standard/;
+use CGI qw/:standard -oldstyle_urls/;
 
 use vars qw( $GZIP );
 

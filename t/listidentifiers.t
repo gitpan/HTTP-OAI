@@ -17,7 +17,7 @@ $r->parse_string($str);
 
 ok(1);
 
-my $ha = HTTP::OAI::Harvester->new(baseURL=>'http://invalid/');
+my $ha = HTTP::OAI::Harvester->new(baseURL=>'http://domain.invalid/');
 $r = $ha->ListRecords(metadataPrefix=>'oai_dc', from=>'2005-01-01');
 my $uri = URI->new($r->request->uri);
 my %args = $uri->query_form;

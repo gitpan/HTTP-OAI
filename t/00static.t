@@ -1,4 +1,8 @@
-use Test::More tests => 19;
+use Test;
+
+use strict;
+
+BEGIN { plan tests => 21 }
 
 use HTTP::OAI;
 ok(1);
@@ -8,7 +12,8 @@ ok(1);
 
 my $repo = HTTP::OAI::Harvester->new(baseURL=>'file:examples/repository.xml',debug=>0);
 ok($repo);
-ok($repo->Identify->baseURL eq 'file:examples/repository.xml');
+ok($repo->Identify->version,'2.0s');
+ok($repo->Identify->baseURL && $repo->Identify->baseURL eq 'file:examples/repository.xml');
 
 # Identify
 my $id = $repo->Identify;
@@ -18,8 +23,8 @@ ok($id->repositoryName && $id->repositoryName eq 'Demo repository');
 # ListMetadataFormats
 my $lmdf = $repo->ListMetadataFormats;
 ok($lmdf->is_success);
-my $mdf = $lmdf->next;
-ok($mdf->metadataPrefix && $mdf->metadataPrefix eq 'oai_dc');
+ok(my $mdf = $lmdf->next);
+ok($mdf && $mdf->metadataPrefix && $mdf->metadataPrefix eq 'oai_dc');
 
 # ListRecords
 my $lr = $repo->ListRecords(metadataPrefix=>'oai_rfc1807');
