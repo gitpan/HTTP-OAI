@@ -51,14 +51,14 @@ sub generate {
 sub start_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
-die unless $self->version;
+	die "Internal Error" unless $self->version;
 	if( defined($self->get_handler()) ) {
-		if( $elem =~ /header|metadata|about/ ) {
+		if( $elem =~ /^header|metadata|about$/ ) {
 			$self->{"in_$elem"}++;
 		}
 	} elsif( $elem eq 'record' && $self->version eq '1.1' ) {
 		$self->status($hash->{Attributes}->{'{}status'}->{Value});
-	} elsif( $elem =~ /header|metadata|about/ ) {
+	} elsif( $elem =~ /^header|metadata|about$/ ) {
 		$self->set_handler(my $handler = $self->{handlers}->{$elem}->new());
 		$self->header($handler) if $elem eq 'header';
 		$self->metadata($handler) if $elem eq 'metadata';
@@ -73,7 +73,7 @@ sub end_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
 	$self->SUPER::end_element($hash);
-	if( defined($self->get_handler()) && $elem =~ /header|metadata|about/ ) {
+	if( defined($self->get_handler()) && $elem =~ /^header|metadata|about$/ ) {
 		if( $self->{"in_$elem"} == $hash->{Depth} ) {
 			$self->SUPER::end_document();
 			$self->set_handler(undef);

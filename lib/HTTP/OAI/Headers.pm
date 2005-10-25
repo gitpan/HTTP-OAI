@@ -4,6 +4,7 @@ use URI;
 use Carp;
 
 use HTTP::OAI::SAXHandler qw( :SAX );
+use HTTP::Headers;
 
 use vars qw( @ISA );
 
@@ -27,13 +28,14 @@ my %VERSIONS = (
 );
 
 sub new {
-	my $class = shift;
+	my ($class,%args) = @_;
 	my $self = bless {
 		'field'=>{
 			'xmlns'=>'http://www.openarchives.org/OAI/2.0/',
 			'xmlns:xsi'=>'http://www.w3.org/2001/XMLSchema-instance',
 			'xsi:schemaLocation'=>'http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd'
 		},
+		%args,
 	}, ref($class) || $class;
 	return $self;
 }
@@ -170,41 +172,17 @@ sub start_element {
 	# With a static repository, don't process any headers
 	if( $self->header('version') && $self->header('version') eq '2.0s' ) {
 		my %args = %{$self->{_args}};
-		# ListIdentifiers gets mapped to ListRecords
-		if( 'ListIdentifiers' eq $args{'verb'} &&
-			$elem eq 'ListRecords' &&
-			$attr->{'{}metadataPrefix'}->{'Value'} eq $args{'metadataPrefix'}
+		# ListRecords and the correct prefix
+		if( $elem eq 'ListRecords' &&
+			$elem eq $args{'verb'} && 
+			$attr->{'{}metadataPrefix'}->{'Value'} eq $args{'metadataPrefix'} ) {
+			$self->{State} = 1;
+		# Start of the verb we're looking for
+		} elsif(
+			$elem ne 'ListRecords' && 
+			$elem eq $args{'verb'}
 		) {
 			$self->{State} = 1;
-		# ListSets isn't supported by static repositories
-		} elsif( 'ListSets' eq $args{'verb'} ) {
-			$self->set_error(HTTP::OAI::Error->new(
-					code=>'noSetHierarchy',
-					message=>'Static Repositories do not support sets.'
-			), 200);
-			$hash->{State}->set_handler(undef);
-		# For GetRecord, perform a ListRecords and then extract
-		# the correct record
-		} elsif( 'GetRecord' eq $args{'verb'} &&
-				 $elem eq 'ListRecords' &&
-			 	 $attr->{'{}metadataPrefix'}->{'Value'} eq $args{'metadataPrefix'} ) {
-			$self->{Old_handler} = $self->get_handler;
-			$self->set_handler(
-				my $lr = HTTP::OAI::ListRecords->new(version=>$self->header('version'))
-			);
-			$self->{State} = 1;
-		# ListRecords needs to match the correct prefix
-		} else {
-			if( $elem eq 'ListRecords' &&
-				$elem eq $args{'verb'} && 
-				$attr->{'{}metadataPrefix'}->{'Value'} eq $args{'metadataPrefix'} ) {
-				$self->{State} = 1;
-			} elsif(
-				$elem ne 'ListRecords' && 
-				$elem eq $args{'verb'}
-			) {
-				$self->{State} = 1;
-			}
 		}
 	} else {
 		$self->{State} = 1;
@@ -218,46 +196,11 @@ sub end_element {
 	my $text = $hash->{Text};
 	# Static repository, don't process any headers
 	if( $self->header('version') && $self->header('version') eq '2.0s' ) {
-		my %args = %{$self->{_args}};
-		# MetadataPrefix not found
-		if( !$self->{State} &&
-			$elem eq 'Repository' &&
-			$args{'verb'} =~ /^GetRecord|ListIdentifiers|ListRecords/
+		# Stop parsing when we get to the closing verb
+		if( $self->{State} &&
+			$elem eq $self->{_args}->{'verb'} &&
+			$hash->{NamespaceURI} eq 'http://www.openarchives.org/OAI/2.0/static-repository'
 		) {
-			$self->set_error(HTTP::OAI::Error->new(
-				code=>'cannotDisseminateFormat'
-			));
-		}
-		# End of ListIdentifiers
-		elsif(
-			$self->{State} &&
-			($elem eq $args{'verb'} ||
-			 ($args{'verb'} eq 'ListIdentifiers' && $elem eq 'ListRecords')) ) {
-			die "Oops! Root handler isn't \$self - $self != $hash->{State}"
-				unless ref($self) eq ref($hash->{State}->get_handler);
-			$hash->{State}->set_handler(undef);
-			$self->{State} = 0;
-		# End of GetRecord (find the matching record)
-		} elsif(
-			$self->{State} &&
-			$args{'verb'} eq 'GetRecord' &&
-			$elem eq 'ListRecords' ) {
-			my $rec;
-			for($self->get_handler->record) {
-				if( $_->identifier eq $args{identifier} ) {
-					$rec = $_;
-					last;
-				}
-			}
-			$self->set_handler($self->{Old_handler});
-			if( $rec ) {
-				$self->get_handler->record($rec);
-			} else {
-				$self->set_error(HTTP::OAI::Error->new(
-					code=>'idDoesNotExist'
-				));
-			}
-			$hash->{State}->set_handler(undef);
 			$self->{State} = 0;
 		}
 		return $self->{State} ?

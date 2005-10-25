@@ -166,17 +166,18 @@ sub Identify {
 sub ListIdentifiers {
 	printtitle("ListIdentifiers");
 
-	my $from = $TERM->readline("Enter an optional from period (yyyy-mm-dd)>");
-	my $until = $TERM->readline("Enter an optional until period (yyyy-mm-dd)>");
-	$TERM->addhistory(@SETS);
-	my $set = $TERM->readline("Enter an optional set ([A-Z0-9_]+)>");
-	my $mdp;
-	if( $PROTOCOL_VERSION > 1.1 ) {
+	my $resumptionToken = $TERM->readline("Enter an optional resumptionToken>");
+	my ($from, $until, $set, $mdp);
+	if( !$resumptionToken ) {
+		$from = $TERM->readline("Enter an optional from period (yyyy-mm-dd)>");
+		$until = $TERM->readline("Enter an optional until period (yyyy-mm-dd)>");
+		$TERM->addhistory(@SETS);
+		$set = $TERM->readline("Enter an optional set ([A-Z0-9_]+)>");
 		$TERM->addhistory(@PREFIXES);
-		$mdp = $TERM->readline("Enter the metadata prefix>",'oai_dc') || 'oai_dc';
+		$mdp = $TERM->readline("Enter the metadataPrefix to use>",'oai_dc') || 'oai_dc';
 	}
 
-	my $r = $h->ListIdentifiers(checkargs(from=>$from,until=>$until,set=>$set,metadataPrefix=>$mdp));
+	my $r = $h->ListIdentifiers(checkargs(resumptionToken=>$resumptionToken,from=>$from,until=>$until,set=>$set,metadataPrefix=>$mdp));
 
 	return if iserror($r);
 

@@ -2,10 +2,11 @@ package HTTP::OAI::Harvester;
 
 use strict;
 use 5.005; # 5.004 seems to have problems with use base
-use vars qw( @ISA $AUTOLOAD $VERSION );
+use vars qw( @ISA $AUTOLOAD );
 use Carp;
 
-$VERSION = '3.10';
+our $VERSION = '3.12';
+our $DEBUG = 0;
 
 use HTTP::OAI::UserAgent;
 @ISA = qw( HTTP::OAI::UserAgent );
@@ -27,12 +28,14 @@ use HTTP::OAI::Set;
 sub new {
 	my ($class,%args) = @_;
 	my %ARGS = %args;
-	for(qw(baseURL resume repository)) {
+	for(qw(baseURL resume repository handlers)) {
 		delete $ARGS{$_};
 	}
 	my $self = $class->SUPER::new(%ARGS);
 
 	$self->{'resume'} = exists($args{resume}) ? $args{resume} : 1;
+	$DEBUG = $args{debug};
+	$self->{'handlers'} = $args{'handlers'};
 	$self->agent('OAI-PERL/'.$VERSION);
 
 	# Record the base URL this harvester instance is associated with
@@ -40,6 +43,7 @@ sub new {
 		$args{repository} ||
 		HTTP::OAI::Identify->new(baseURL=>$args{baseURL});
 	croak "Requires repository or baseURL" unless $self->repository && $self->repository->baseURL;
+	# Canonicalise
 	$self->baseURL($self->baseURL);
 
 	return $self;
@@ -95,7 +99,7 @@ sub AUTOLOAD {
 			verb=>$name,
 			@_
 		);
-		my $handlers = $args{handlers};
+		my $handlers = $args{handlers}||$self->{'handlers'};
 		delete $args{handlers};
 		if( !$args{force} &&
 			defined($self->repository->version) &&
@@ -112,11 +116,12 @@ sub AUTOLOAD {
 			delete $args{$_} if !defined($args{$_}) || !length($args{$_});
 		}
 	
-		# Check for a static repository
-		if( !defined($self->repository->version) ) {
+		# Check for a static repository (sets _static)
+		if( !$self->{_interogated} ) {
 			$self->interogate();
+			$self->{_interogated} = 1;
 		}
-
+		
 		if( 'ListIdentifiers' eq $name &&
 			defined($self->repository->version) && 
 			'1.1' eq $self->repository->version ) {
@@ -128,9 +133,83 @@ sub AUTOLOAD {
 			handlers=>$handlers,
 		);
 		$r->headers->{_args} = \%args;
-		return $self->{_static} ?
-			$r->parse_string($self->{_static}) :
-			$self->request({baseURL=>$self->baseURL,%args},undef,undef,undef,$r);
+
+		# Parse all the records if _static set
+		if( defined($self->{_static}) && !defined($self->{_records}) ) {
+			my $lmdf = HTTP::OAI::ListMetadataFormats->new(
+				handlers=>$handlers,
+			);
+			$lmdf->headers->{_args} = {
+				%args,
+				verb=>'ListMetadataFormats',
+			};
+			# Find the metadata formats
+			$lmdf = $lmdf->parse_string($self->{_static});
+			return $lmdf unless $lmdf->is_success;
+			@{$self->{_formats}} = $lmdf->metadataFormat;
+			# Extract all records
+			$self->{_records} = {};
+			for($lmdf->metadataFormat) {
+				my $lr = HTTP::OAI::ListRecords->new(
+					handlers=>$handlers,
+				);
+				$lr->headers->{_args} = {
+					%args,
+					verb=>'ListRecords',
+					metadataPrefix=>$_->metadataPrefix,
+				};
+				$lr->parse_string($self->{_static});
+				@{$self->{_records}->{$_->metadataPrefix}} = $lr->record;
+			}
+			undef($self->{_static});
+		}
+		
+		# Make the remote request and return the result
+		if( !defined($self->{_records}) ) {
+			return $self->request({baseURL=>$self->baseURL,%args},undef,undef,undef,$r);
+		# Parse our memory copy of the static repository
+		} else {
+			$r->code(200);
+			# Format doesn't exist
+			if( $name =~ /^GetRecord|ListIdentifiers|ListRecords$/ &&
+				!exists($self->{_records}->{$args{metadataPrefix}}) ) {
+				$r->code(600);
+				$r->errors(HTTP::OAI::Error->new(
+					code=>'cannotDisseminateFormat',
+				));
+			# GetRecord
+			} elsif( $name eq 'GetRecord' ) {
+				for(@{$self->{_records}->{$args{metadataPrefix}}}) {
+					if( $_->identifier eq $args{identifier} ) {
+						$r->record($_);
+						return $r;
+					}
+				}
+				$r->code(600);
+				$r->errors(HTTP::OAI::Error->new(
+					code=>'idDoesNotExist'
+				));
+			# Identify
+			} elsif( $name eq 'Identify' ) {
+				$r = $self->repository();
+			# ListIdentifiers
+			} elsif( $name eq 'ListIdentifiers' ) {
+				$r->identifier(map { $_->header } @{$self->{_records}->{$args{metadataPrefix}}})
+			# ListMetadataFormats
+			} elsif( $name eq 'ListMetadataFormats' ) {
+				$r->metadataFormat(@{$self->{_formats}});
+			# ListRecords
+			} elsif( $name eq 'ListRecords' ) {
+				$r->record(@{$self->{_records}->{$args{metadataPrefix}}});
+			# ListSets
+			} elsif( $name eq 'ListSets' ) {
+				$r->errors(HTTP::OAI::Error->new(
+					code=>'noSetHierarchy',
+					message=>'Static Repositories do not support sets',
+				));
+			}
+			return $r;
+		}
 	} else {
 		my $superior = "SUPER::$name";
 		return $self->$superior(@_);
@@ -141,13 +220,17 @@ sub interogate {
 	my $self = shift;
 	croak "Requires baseURL" unless $self->baseURL;
 	
+	warn "Requesting " . $self->baseURL . "\n" if $DEBUG;
 	my $r = $self->request(HTTP::Request->new(GET => $self->baseURL));
 	return unless length($r->content);
-	my $id = HTTP::OAI::Identify->new();
+	my $id = HTTP::OAI::Identify->new(
+		handlers=>$self->{handlers},
+	);
 	$id->headers->{_args} = {verb=>'Identify'};
 	$id->parse_string($r->content);
 	if( $id->is_success && $id->version eq '2.0s' ) {
 		$self->{_static} = $r->content;
+		$self->repository($id);
 	}
 }
 

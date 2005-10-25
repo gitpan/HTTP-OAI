@@ -1,8 +1,9 @@
 package HTTP::OAI::UserAgent;
 
-use vars qw(@ISA $ACCEPT $DEBUG $PARSER);
+use vars qw(@ISA $ACCEPT $PARSER);
 
-$DEBUG = 0;
+our $DEBUG = 0;
+our $USE_EVAL = 1;
 
 use strict;
 use warnings;
@@ -46,14 +47,25 @@ sub request
 			Handler => $response->headers
 	));
 	$PARSER->{content_length} = 0;
+	$response->code(200);
+	$response->message('lwp_callback');
 	$response->headers->set_handler($response);
 	my $r;
 	warn "Requesting " . $request->uri . "\n" if $DEBUG;
-	eval {
+	if( $USE_EVAL ) {
+		eval {
+			$r = $self->SUPER::request($request,\&lwp_callback);
+			$PARSER->parse_chunk("",1);
+		};
+	} else {
 		$r = $self->SUPER::request($request,\&lwp_callback);
 		$PARSER->parse_chunk("",1);
-	};
+	}
 	$response->headers->set_handler(undef);
+	
+	# Allow access to the original headers through 'previous'
+	$response->previous($r);
+	
 	my $cnt_len = $PARSER->{content_length};
 	undef $PARSER;
 	# OAI retry-after
@@ -88,11 +100,19 @@ sub request
 			code=>$code,
 			message=>$@,
 		));
-	# Otherwise, copy the HTTP::Response
-	} else {
-		$response->copy_from($r);
+	# Otherwise, copy the HTTP::Response on error
+	} elsif( $r->is_error ) {
+		$self->code($r->code);
+		$self->message($r->message);
+		$self->errors(HTTP::OAI::Error->new(
+			code=>$r->code,
+			message=>$r->message,
+		));
+		$self->content($r->content); # There will be content in the event of an error
 	}
-	$response->request($request); # Original $request => OAI $response
+	# Copy original $request => OAI $response to allow easy
+	# access to the requested URL
+	$response->request($request);
 	$response;
 }
 

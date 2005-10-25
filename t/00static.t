@@ -10,10 +10,11 @@ ok(1);
 # This test harness checks that the library correctly supports
 # transparent gateway to static repositories
 
-my $repo = HTTP::OAI::Harvester->new(baseURL=>'file:examples/repository.xml',debug=>0);
+my $fn = "file:".$ENV{PWD}."/examples/repository.xml";
+my $repo = HTTP::OAI::Harvester->new(baseURL=>$fn,debug=>0);
 ok($repo);
-ok($repo->Identify->version,'2.0s');
-ok($repo->Identify->baseURL && $repo->Identify->baseURL eq 'file:examples/repository.xml');
+ok($repo->Identify->version eq '2.0s');
+ok($repo->Identify->baseURL && $repo->Identify->baseURL eq 'file:///examples/repository.xml');
 
 # Identify
 my $id = $repo->Identify;
@@ -36,13 +37,13 @@ ok($rec && $rec->identifier && $rec->identifier eq 'oai:arXiv:cs/0112017');
 my $li = $repo->ListIdentifiers(metadataPrefix=>'oai_dc');
 ok($li->is_success);
 my @recs = $li->identifier;
-ok(@recs && $recs[$#recs]->identifier eq 'oai:perseus:Perseus:text:1999.02.0084');
+ok(@recs && $recs[-1]->identifier eq 'oai:perseus:Perseus:text:1999.02.0084');
 
 # ListSets
 my $ls = $repo->ListSets();
 ok($ls->is_success);
 my @errs = $ls->errors;
-ok(@errs && $errs[0]->code eq 'noSetHierarchy','noSetHierarchy');
+ok(@errs && $errs[-1]->code eq 'noSetHierarchy');
 
 # GetRecord
 my $gr = $repo->GetRecord(metadataPrefix=>'oai_dc',identifier=>'oai:perseus:Perseus:text:1999.02.0084');

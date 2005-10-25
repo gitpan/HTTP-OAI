@@ -35,7 +35,7 @@ sub adminEmail {
 		@{$self->{adminEmail}} :
 		$self->{adminEmail}->[0]
 }
-sub baseURL { return shift->headers->header('baseURL',@_) }
+sub baseURL { shift->headers->header('baseURL',@_) }
 sub compression {
 	my $self = shift;
 	push @{$self->{compression}}, @_;

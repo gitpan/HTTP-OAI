@@ -2,6 +2,8 @@ package HTTP::OAI::Response;
 
 use vars qw($BAD_REPLACEMENT_CHAR @ISA);
 
+our $USE_EVAL = 1;
+
 use utf8;
 
 use HTTP::Response;
@@ -25,27 +27,26 @@ $BAD_REPLACEMENT_CHAR = '?';
 
 sub new {
 	my ($class,%args) = @_;
-	$args{headers} = new HTTP::OAI::Headers();
-	$args{errors} ||= [];
-	$args{resume} = 1 unless exists $args{resume};
-	$args{handlers} ||= {};
-	my $self = bless \%args, ref($class) || $class;
+	#$args{handlers} ||= {};
+	#$args{headers} = new HTTP::OAI::Headers(handlers=>$args{handlers});
+	#$args{errors} ||= [];
+	#$args{resume} = 1 unless exists $args{resume};
+	#my $self = bless \%args, ref($class) || $class;
+	my $self = $class->SUPER::new(
+		$args{code},
+		$args{message}
+	);
+	# Force headers
+	$self->{handlers} = $args{handlers} || {};
+	$self->{_headers} = new HTTP::OAI::Headers(handlers=>$args{handlers});
+	$self->{errors} = $args{errors} || [];
+	$self->{resume} = defined($args{resume}) ? $args{resume} : 1;
 
 	# Force the version of OAI to try to parse
 	$self->version($args{version});
 
-	# HTTP::Response initialisation
-	if( $args{code} ) {
-		$self->code($args{code});
-	}
-	if( $args{message} ) {
-		$self->message($args{message});
-	}
-
-	# Parse an OAI response
-	if( $args{HTTPresponse} ) {
-		$self->initialize_HTTPresponse($args{HTTPresponse});
-	}
+	# Add the harvestAgent
+	$self->harvestAgent($args{harvestAgent});
 
 	# OAI initialisation
 	if( $args{responseDate} ) {
@@ -74,23 +75,6 @@ sub new {
 	return $self;
 }
 
-sub copy_from {
-	my ($self,$r) = @_;
-	$self->{_headers} = $r->headers;
-
-	$self->code($r->code);
-	$self->message($r->message);
-	$self->request($r->request);
-	$self->previous($r->previous);
-	
-	$self->content($r->content); # There will be content in the event of an error
-	
-	$self->errors(HTTP::OAI::Error->new(
-		code=>$r->code,
-		message=>$r->message,
-	)) if $r->is_error;
-}
-
 sub parse_file {
 	my ($self, $fh) = @_;
 
@@ -103,7 +87,9 @@ sub parse_file {
 	));
 
 	$self->headers->set_handler($self);
-	eval { $parser->parse_file($fh) };
+	$USE_EVAL ?
+		eval { $parser->parse_file($fh) } :
+		$parser->parse_file($fh);
 	$self->headers->set_handler(undef); # Otherwise we memory leak!
 
 	if( $@ ) {
@@ -136,7 +122,9 @@ sub parse_string {
 		));
 
 		$self->headers->set_handler($self);
-		eval { $parser->parse_string($str) };
+		$USE_EVAL ?
+			eval { $parser->parse_string($str) } :
+			$parser->parse_string($str);
 		$self->headers->set_handler(undef);
 
 		if( $@ ) {
@@ -162,13 +150,10 @@ sub parse_string {
 				message=>$msg
 			));
 	}
-
 	$self;
 }
 
-sub harvestAgent {
-	return shift->{harvestAgent};
-}
+sub harvestAgent { shift->headers->header('harvestAgent',@_) }
 
 # Resume a request using a resumptionToken
 sub resume {
@@ -244,7 +229,7 @@ sub toDOM {
 	$builder->result;
 }
 
-sub headers { shift->{headers} }
+#sub headers { shift->{headers} }
 sub errors {
 	my $self = shift;
 	push @{$self->{errors}}, @_;
@@ -278,7 +263,7 @@ sub is_error {
 
 sub end_element {
 	my ($self,$hash) = @_;
-	my $elem = $hash->{Name};
+	my $elem = lc($hash->{Name});
 	$self->SUPER::end_element($hash);
 	if( $elem eq 'error' ) {
 		my $code = $hash->{Attributes}->{'{}code'}->{'Value'} || 'oai-lib: Undefined error code';

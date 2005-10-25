@@ -64,8 +64,8 @@ sub start_element {
 
 sub end_element {
 	my ($self,$hash) = @_;
-	my $elem = $hash->{Name};
 	$self->SUPER::end_element($hash);
+	my $elem = lc($hash->{Name});
 	if( $elem eq 'record' && $self->{"in_$elem"} == $hash->{Depth} ) {
 		$self->set_handler($self->{OLDHandler});
 	}
