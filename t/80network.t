@@ -20,10 +20,10 @@ my $h = HTTP::OAI::Harvester->new(debug=>0,baseURL=>$repos[int(rand(@repos))]);
 
 my $r;
 
-my $dotest = defined($ENV{"SKIP_HTTP_OAI_NETTESTS"});
+my $dotest = defined($ENV{"HTTP_OAI_NETTESTS"});
 
 SKIP : {
-	skip "Skipping flakey net tests (set SKIP_HTTP_OAI_NETTESTS env. variable to enable)", 5 unless $dotest;
+	skip "Skipping flakey net tests (set HTTP_OAI_NETTESTS env. variable to enable)", 5 unless $dotest;
 
 	#$r = $h->GetRecord(identifier=>'oai:eprints.ecs.soton.ac.uk:23',metadataPrefix=>'oai_dc');
 	#ok($r->is_success());

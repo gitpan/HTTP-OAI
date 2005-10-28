@@ -5,7 +5,7 @@ use 5.005; # 5.004 seems to have problems with use base
 use vars qw( @ISA $AUTOLOAD );
 use Carp;
 
-our $VERSION = '3.12';
+our $VERSION = '3.13';
 our $DEBUG = 0;
 
 use HTTP::OAI::UserAgent;
