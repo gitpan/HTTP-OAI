@@ -1,3 +1,19 @@
+3.15
+
+	- Several bug fixes, particularly catching and throwing parsing errors
+	- Added onRecord argument to ListRecords, ListIdentifiers, ListSets
+	- INCOMPATIBLE: Changed error handling, so now only need to check after the
+		next() loop for both initial errors and flow errors
+	- Added is_deleted method to Record and Header
+
+3.14
+
+	- By default oai-lib now fixes bad UTF-8 characters (replacing with '?')
+	  To disable this set $HTTP::OAI::UserAgent::IGNORE_BAD_CHARS to 0
+	- Fixed bug where a partially downloaded utf-8 character could cause a harvest to fail
+
+3.13
+
 3.12
 	- BUG: Static repository was re-fetching the source for every request
 	- API change: when parsing a static repository records are now pre-parsed to allow for quick GetRecord access, this means you *must* supply the handlers argument to the Harvester constructor (otherwise the first request's handlers are always used)

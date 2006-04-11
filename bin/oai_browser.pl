@@ -1,5 +1,42 @@
 #!/usr/bin/perl -w
 
+=head1 NAME
+
+oai_browser - Command line OAI repository browser
+
+=head1 DESCRIPTION
+
+The oai_browser utility provides a command-line tool to browse an OAI-compliant
+repository.
+
+=head1 SYNOPSIS
+
+oai_browser.pl B<[options]> I<arguments>
+
+=head1 ARGUMENTS
+
+=over 4
+
+=item I<baseURL>
+
+Specify baseURL to connect to.
+
+=back
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--help>
+
+Show this page.
+
+=item B<--silent>
+
+Don't display data harvested from the repository - only shows a record count.
+
+=cut
+
 BEGIN {
 	unshift @INC, ".";
 }
@@ -9,6 +46,7 @@ use vars qw($VERSION $PROTOCOL_VERSION $h);
 use lib "../lib";
 
 use HTTP::OAI;
+use Pod::Usage;
 
 $VERSION = $HTTP::OAI::Harvester::VERSION;
 
@@ -33,25 +71,24 @@ use Term::ReadKey;
 use HTTP::OAI::Harvester;
 use HTTP::OAI::Metadata::OAI_DC;
 
+my ($opt_silent, $opt_help);
+$opt_silent = 0;
+GetOptions (
+	'silent' => \$opt_silent,
+	'help' => \$opt_help,
+);
+
+pod2usage(1) if $opt_help;
+
 print <<EOF;
 Welcome to the Open Archives Browser $VERSION
 
-Copyright 2005 Tim Brody <tdb01r\@ecs.soton.ac.uk>
+Copyright 2005-2006 Tim Brody <tdb01r\@ecs.soton.ac.uk>
 
 Use CTRL+C to quit at any time
 
 ---
 
-EOF
-
-my $SILENT = '';
-my $HELP = '';
-GetOptions ('silent' => \$SILENT,'help' => \$HELP);
-
-die <<EOF if $HELP;
-Usage: $0
-	--help	Show this message
-	--silent	Suppress the display of returned data
 EOF
 
 my $DEFAULTID = '';
@@ -63,7 +100,7 @@ $TERM->addhistory(@ARCHIVES);
 while(1) {
 #	my $burl = input('Enter the base URL to use [http://cogprints.soton.ac.uk/perl/oai2]: ') || 'http://cogprints.soton.ac.uk/perl/oai2';
 	my $burl = shift || $TERM->readline('OAI Base URL to query>','http://cogprints.soton.ac.uk/perl/oai2') || next;
-	$h = new HTTP::OAI::Harvester(baseURL=>$burl,debug=>!$SILENT);
+	$h = new HTTP::OAI::Harvester(baseURL=>$burl,debug=>!$opt_silent);
 	if( my $r = Identify() ) {
 		$h->repository($r);
 		$PROTOCOL_VERSION = $r->version;
@@ -81,12 +118,10 @@ sub mainloop {
 			"1. GetRecord\n2. Identify\n3. ListIdentifiers\n4. ListMetadataFormats\n5. ListRecords\n6. ListSets\nq. Quit\n\n>";
 		my $cmd;
 		ReadMode(4);
-		while( not defined($cmd = ReadKey(-1)) ) {
-			sleep(1);
-		}
+		$cmd = ReadKey();
 		ReadMode(0);
 		last unless defined($cmd);
-		print $cmd;
+		print $cmd . "\n";
 		if( $cmd eq 'q' ) {
 			last;
 		} elsif($cmd eq '1') {
@@ -120,10 +155,8 @@ sub GetRecord {
 		},
 	);
 
-	return if iserror($r);
-
-	printheader($r);
 	if( defined(my $rec = $r->next) ) {
+		printheader($r);
 		print "identifier => ", $rec->identifier,
 			($rec->status ? " (".$rec->status.") " : ''), "\n",
 			"datestamp => ", $rec->datestamp, "\n";
@@ -134,9 +167,9 @@ sub GetRecord {
 			$rec->metadata->toString if defined($rec->metadata);
 		print "\nAbout data:\n",
 			join("\n",map { $_->toString } $rec->about) if $rec->about;
-	} else {
-		print "Unable to extract record from OAI response (check your identifier?)\n";
 	}
+
+	iserror($r);
 }
 
 sub Identify {
@@ -177,22 +210,28 @@ sub ListIdentifiers {
 		$mdp = $TERM->readline("Enter the metadataPrefix to use>",'oai_dc') || 'oai_dc';
 	}
 
-	my $r = $h->ListIdentifiers(checkargs(resumptionToken=>$resumptionToken,from=>$from,until=>$until,set=>$set,metadataPrefix=>$mdp));
-
-	return if iserror($r);
-
-	printheader($r);
 	my $c = 0;
-	while( my $rec = $r->next ) {
-		return if iserror($rec);
-		if( $SILENT ) {
-			print STDERR $c++, "\r";
-		} else {
+	my $cb = $opt_silent ?
+		sub { print STDERR $c++, "\r"; } :
+		sub {
+			my $rec = shift;
+			$c++;
 			print "identifier => ", $rec->identifier,
 				(defined($rec->datestamp) ? " / " . $rec->datestamp : ''),
 				($rec->status ? " (".$rec->status.") " : ''), "\n";
-		}
-	}
+		};
+
+	#printheader($r);
+	my $r = $h->ListIdentifiers(
+		checkargs(resumptionToken=>$resumptionToken,from=>$from,until=>$until,set=>$set,metadataPrefix=>$mdp),
+		onRecord => $cb,
+	);
+
+	while( my $rec = $r->next ) { }
+
+	print "\nRead a total of $c records\n";
+
+	return if iserror($r);
 }
 
 sub ListMetadataFormats {
@@ -228,22 +267,12 @@ sub ListRecords {
 		$mdp = $TERM->readline("Enter the metadataPrefix to use>",'oai_dc') || 'oai_dc';
 	}
 
-	my $r = $h->ListRecords(
-		checkargs(resumptionToken=>$resumptionToken,from=>$from,until=>$until,set=>$set,metadataPrefix=>$mdp),
-		handlers=>{
-			metadata=>($mdp eq 'oai_dc' ? 'HTTP::OAI::Metadata::OAI_DC' : undef),
-		},
-	);
-
-	return if iserror($r);
-
-	printheader($r);
 	my $c = 0;
-	while(my $rec = $r->next) {
-		return if iserror($rec);
-		if( $SILENT ) {
-			print STDERR $c++, "\r";
-		} else {
+	my $cb = $opt_silent ?
+		sub { print STDERR $c++, "\r"; } :
+		sub {
+			my $rec = shift;
+			$c++;
 			print "\nidentifier => ", $rec->identifier,
 				($rec->status ? " (".$rec->status.") " : ''), "\n",
 				"datestamp => ", $rec->datestamp, "\n";
@@ -254,24 +283,39 @@ sub ListRecords {
 				($rec->metadata->toString||'(null)') if $rec->metadata;
 			print "\nAbout data:\n",
 				join("\n",map { ($_->toString||'(null)') } $rec->about) if $rec->about;
-		}
-	}
+		};
+
+	#printheader($r);
+	my $r = $h->ListRecords(
+		checkargs(resumptionToken=>$resumptionToken,from=>$from,until=>$until,set=>$set,metadataPrefix=>$mdp),
+		handlers=>{
+			metadata=>(($mdp and $mdp eq 'oai_dc') ? 'HTTP::OAI::Metadata::OAI_DC' : undef),
+		},
+		onRecord => $cb,
+	);
+	
+	while(my $rec = $r->next) { }
+
+	print "\nRead a total of $c records\n";
+
+	return if iserror($r);
 }
 
 sub ListSets {
 	printtitle("ListSets");
 
-	my $r = $h->ListSets;
-
-	return if iserror($r);
-
-	printheader($r);
-	while(my $rec = $r->next) {
-		return if iserror($rec);
+	sub cb {
+		my $rec = shift;
 		push @SETS, $rec->setSpec;
 		print "setSpec => ", $rec->setSpec, "\n",
 			"setName => ", ($rec->setName||'(null)'), "\n";
-	}
+	};
+
+	my $r = $h->ListSets(onRecord=>\&cb);
+
+	while($r->next) { }
+
+	return if iserror($r);
 }
 
 sub input {
@@ -294,9 +338,9 @@ sub printtitle {
 
 sub printheader {
 	my $r = shift;
-	print "verb => ", $r->headers->header('verb'), "\n",
-		"responseDate => ", $r->headers->header('responseDate'), "\n",
-		"requestURL => ", $r->headers->header('requestURL'), "\n";
+	print "verb => ", $r->verb, "\n",
+		"responseDate => ", $r->responseDate, "\n",
+		"requestURL => ", $r->requestURL, "\n";
 }
 
 sub checkargs {

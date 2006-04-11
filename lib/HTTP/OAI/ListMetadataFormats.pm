@@ -58,14 +58,12 @@ HTTP::OAI::ListMetadataFormats - Provide access to an OAI ListMetadataFormats re
 
 	my $r = $h->ListMetadataFormats;
 
-	die $r->message if $r->is_error;
-
 	# ListMetadataFormats doesn't use flow control
 	while( my $rec = $r->next ) {
 		print $rec->metadataPrefix, "\n";
 	}
 
-	$r->dispose:
+	die $r->message if $r->is_error;
 
 =head1 METHODS
 

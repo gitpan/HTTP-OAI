@@ -2,8 +2,12 @@ package HTTP::OAI::UserAgent;
 
 use vars qw(@ISA $ACCEPT $PARSER);
 
+# Show debug messages
 our $DEBUG = 0;
+# Do not use eval()
 our $USE_EVAL = 1;
+# Ignore bad utf8 characters
+our $IGNORE_BAD_CHARS = 1;
 
 use strict;
 use warnings;
@@ -13,13 +17,11 @@ use HTTP::Response;
 use URI;
 use Carp;
 use XML::LibXML;
+use Encode;
 
 require LWP::UserAgent;
 @ISA = qw(LWP::UserAgent);
 
-use strict;
-
-eval { require Compress::Zlib };
 unless( $@ ) {
 	$ACCEPT = "gzip";
 }
@@ -47,6 +49,7 @@ sub request
 			Handler => $response->headers
 	));
 	$PARSER->{content_length} = 0;
+	$PARSER->{content_buffer} = encode('utf8','');
 	$response->code(200);
 	$response->message('lwp_callback');
 	$response->headers->set_handler($response);
@@ -55,12 +58,18 @@ sub request
 	if( $USE_EVAL ) {
 		eval {
 			$r = $self->SUPER::request($request,\&lwp_callback);
-			$PARSER->parse_chunk("",1);
+			lwp_endparse();
 		};
 	} else {
 		$r = $self->SUPER::request($request,\&lwp_callback);
-		$PARSER->parse_chunk("",1);
+		lwp_endparse();
 	}
+	if( defined($r) && defined($r->headers->header( 'Client-Aborted' )) && $r->headers->header( 'Client-Aborted' ) eq 'die' )
+	{
+		$r->code(500);
+		$r->message( 'An error occurred while parsing: ' . $r->headers->header( 'X-Died' ));
+	}
+
 	$response->headers->set_handler(undef);
 	
 	# Allow access to the original headers through 'previous'
@@ -68,16 +77,17 @@ sub request
 	
 	my $cnt_len = $PARSER->{content_length};
 	undef $PARSER;
+
 	# OAI retry-after
 	if( defined($r) && $r->code == 503 && defined(my $timeout = $r->headers->header('Retry-After')) ) {
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
 			warn ref($self)."::request (retry-after) Given up requesting after 10 retries\n";
-			return $r;
+			return $response->copy_from( $r );
 		}
-		if( !$timeout || $timeout < 0 || $timeout > 86400 ) {
+		if( !$timeout or $timeout =~ /\D/ or $timeout < 0 or $timeout > 86400 ) {
 			warn ref($self)." Archive specified an odd duration to wait (\"".($timeout||'null')."\")\n";
-			return $r;
+			return $response->copy_from( $r );
 		}
 		warn "Waiting $timeout seconds [" . $request->uri . "]\n" if $DEBUG;
 		sleep($timeout+10); # We wait an extra 10 secs for safety
@@ -87,11 +97,18 @@ sub request
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
 			warn ref($self)."::request (empty response) Given up requesting after 10 retries\n";
-			return $r;
+			return $response->copy_from( $r );
 		}
 		warn "Retrying on empty response [" . $request->uri . "]\n" if $DEBUG;
 		sleep(5);
 		return $self->request($request,undef,undef,undef,$response);
+	# An HTTP error occurred
+	} elsif( $r->is_error ) {
+		$response->copy_from( $r );
+		$response->errors(HTTP::OAI::Error->new(
+			code=>$r->code,
+			message=>$r->message,
+		));
 	# An error occurred during parsing
 	} elsif( $@ ) {
 		$response->code(my $code = $@ =~ /read timeout/ ? 504 : 600);
@@ -100,26 +117,50 @@ sub request
 			code=>$code,
 			message=>$@,
 		));
-	# Otherwise, copy the HTTP::Response on error
-	} elsif( $r->is_error ) {
-		$self->code($r->code);
-		$self->message($r->message);
-		$self->errors(HTTP::OAI::Error->new(
-			code=>$r->code,
-			message=>$r->message,
-		));
-		$self->content($r->content); # There will be content in the event of an error
 	}
+
+	# Reset the recursion timer
+	$self->{recursion} = 0;
+	
 	# Copy original $request => OAI $response to allow easy
 	# access to the requested URL
 	$response->request($request);
 	$response;
 }
 
+sub lwp_endparse
+{
+	my $utf8 = $PARSER->{content_buffer};
+	# Replace bad chars with '?'
+	if( $IGNORE_BAD_CHARS and length($utf8) ) {
+		$utf8 = decode('utf8', $utf8, Encode::FB_PERLQQ|Encode::FB_WARN);
+		_ccchars(\$utf8); # Fix control chars
+	}
+	if( length($utf8) > 0 )
+	{
+		$PARSER->{content_length} += length($utf8);
+		$PARSER->parse_chunk($utf8);
+	}
+	delete($PARSER->{content_buffer});
+	$PARSER->parse_chunk('', 1);
+}
+
 sub lwp_callback
 {
-	$PARSER->{content_length} += length($_[0]);
-	$PARSER->parse_chunk($_[0]);
+	$PARSER->{content_buffer} .= $_[0];
+	# FB_QUIET won't split multi-byte chars on input
+	my $utf8 = decode('utf8', $PARSER->{content_buffer}, Encode::FB_QUIET);
+	_ccchars(\$utf8); # Fix control chars
+	if( length($utf8) > 0 )
+	{
+		$PARSER->{content_length} += length($utf8);
+		$PARSER->parse_chunk($utf8);
+	}
+}
+
+sub _ccchars {
+	my $str = shift;
+	$$str =~ s/([\x00-\x08\x0b-\x0c\x0e-\x1f])/sprintf("\\%04d",ord($1))/seg;
 }
 
 sub _buildurl {

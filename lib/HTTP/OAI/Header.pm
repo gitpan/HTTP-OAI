@@ -39,6 +39,8 @@ sub datestamp {
 	return $self->_elem('datestamp',$ds);
 }
 sub status { shift->_attr('status',@_) }
+sub is_deleted { my $s = shift->status(); return defined($s) && $s eq 'deleted'; }
+
 sub setSpec {
 	my $self = shift;
 	push(@{$self->{setSpec}},@_);
@@ -130,28 +132,32 @@ HTTP::OAI::Header - Encapsulates an OAI header structure
 
 =over 4
 
-=item $id = new HTTP::OAI::Header
+=item $h = new HTTP::OAI::Header
 
-This constructor method returns a new HTTP::OAI::Header object.
+This constructor method returns a new C<HTTP::OAI::Header object>.
 
-=item $idstring = $id->identifier([$idstring])
+=item $h->identifier([$identifier])
 
-Returns and optionally sets the identifier string.
+Get and optionally set the record OAI identifier.
 
-=item $ds = $id->datestamp([$datestamp])
+=item $h->datestamp([$datestamp])
 
-Returns and optionally sets the datestamp (OAI 2.0 only).
+Get and optionally set the record datestamp (OAI 2.0+).
 
-=item $status = $id->status([$status])
+=item $h->status([$status])
 
-Returns and optionally sets the status. Status is defined by the OAI protocol to be undef or 'deleted'.
+Get and optionally set the record status (valid values are 'deleted' or undef).
 
-=item @sets = $id->setSpec([$setSpec])
+=item $h->is_deleted()
 
-Returns the list of setSpecs and optionally appends a new setSpec, $setSpec (OAI 2.0 only).
+Returns whether this record's status is deleted.
+
+=item @sets = $h->setSpec([$setSpec])
+
+Returns the list of setSpecs and optionally appends a new setSpec C<$setSpec> (OAI 2.0+).
 
 =item $dom_fragment = $id->generate()
 
-Act as a SAX driver (use $id->set_handler() to specify the filter to pass events to).
+Act as a SAX driver (use C<$h->set_handler()> to specify the filter to pass events to).
 
 =back

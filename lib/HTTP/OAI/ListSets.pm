@@ -17,7 +17,7 @@ sub new {
 	my $self = $class->SUPER::new(%args);
 	
 	$self->{set} ||= [];
-	$self->verb('ListSets') unless $self->verb;
+	$self->{onRecord} = $args{onRecord};
 
 	$self;
 }
@@ -26,6 +26,7 @@ sub resumptionToken { shift->headers->header('resumptionToken',@_) }
 
 sub set {
 	my $self = shift;
+	return $self->{onRecord}->($_[0]) if @_ and defined($self->{onRecord});
 	push(@{$self->{set}}, @_);
 	return wantarray ?
 		@{$self->{set}} :
@@ -34,12 +35,11 @@ sub set {
 
 sub next {
 	my $self = shift;
-	my $value = shift @{$self->{set}};
-	return $value if $value;
+	return shift @{$self->{set}} if @{$self->{set}};
 	return undef if (!$self->{'resume'} || !$self->resumptionToken || $self->resumptionToken->is_empty);
 
-	my $r = $self->resume(resumptionToken=>$self->resumptionToken);
-	return $r->is_success ? $self->next : $r;
+	$self->resume(resumptionToken=>$self->resumptionToken);
+	return $self->is_success ? $self->next : undef;
 }
 
 sub generate_body {
@@ -60,14 +60,13 @@ sub start_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{Name});
 	if( $elem eq 'set' ) {
-		unless( $self->{in_set} ) {
-			$self->set(my $set = new HTTP::OAI::Set(
+		if( !$self->{in_set} ) {
+			$self->set_handler(new HTTP::OAI::Set(
 				version=>$self->version,
-				handlers=>$self->{handlers},
+				handlers=>$self->{handlers}
 			));
-			$self->set_handler($set);
+			$self->{in_set} = $hash->{Depth};
 		}
-		$self->{in_elem}++;	
 	} elsif( $elem eq 'resumptiontoken' ) {
 		$self->resumptionToken(my $rt = new HTTP::OAI::ResumptionToken(version=>$self->version));
 		$self->set_handler($rt);
@@ -78,8 +77,10 @@ sub start_element {
 sub end_element {
 	my ($self,$hash) = @_;
 	$self->SUPER::end_element($hash);
-	if( lc($hash->{Name}) eq 'set' ) {
-		$self->{in_elem}--;
+	if( lc($hash->{Name}) eq 'set' and $self->{in_set} == $hash->{Depth} ) {
+		$self->set( $self->get_handler );
+		$self->set_handler( undef );
+		$self->{in_set} = 0;
 	}
 }
 
@@ -95,12 +96,11 @@ HTTP::OAI::ListSets - Provide access to an OAI ListSets response
 
 	my $r = $h->ListSets();
 
-	die $r->message if $r->is_error;
-
 	while( my $rec = $r->next ) {
-		die $rec->message if $rec->is_error;
 		print $rec->setSpec, "\n";
 	}
+
+	die $r->message if $r->is_error;
 
 =head1 METHODS
 

@@ -2,6 +2,7 @@ package HTTP::OAI::Record;
 
 use vars qw(@ISA);
 
+use Carp;
 use HTTP::OAI::Metadata;
 use HTTP::OAI::Header;
 use HTTP::OAI::Metadata;
@@ -52,17 +53,17 @@ sub start_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
 	die "Internal Error" unless $self->version;
-	if( defined($self->get_handler()) ) {
-		if( $elem =~ /^header|metadata|about$/ ) {
+	if( defined($self->get_handler) ) {
+		if( exists($self->{"in_$elem"}) ) {
 			$self->{"in_$elem"}++;
 		}
 	} elsif( $elem eq 'record' && $self->version eq '1.1' ) {
 		$self->status($hash->{Attributes}->{'{}status'}->{Value});
 	} elsif( $elem =~ /^header|metadata|about$/ ) {
-		$self->set_handler(my $handler = $self->{handlers}->{$elem}->new());
-		$self->header($handler) if $elem eq 'header';
-		$self->metadata($handler) if $elem eq 'metadata';
-		$self->about($handler) if $elem eq 'about';
+		my $handler = $self->{handlers}->{$elem}->new() or
+			die sprintf("Error getting handler for <%s> (failed to create new %s)", $elem, $self->{handlers}->{$elem});
+		$self->set_handler($handler);
+		$self->$elem($handler);
 		$self->SUPER::start_document();
 		$self->{"in_$elem"} = $hash->{Depth};
 	}
@@ -73,12 +74,14 @@ sub end_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
 	$self->SUPER::end_element($hash);
-	if( defined($self->get_handler()) && $elem =~ /^header|metadata|about$/ ) {
+	if( exists($self->{"in_$elem"}) ) {
 		if( $self->{"in_$elem"} == $hash->{Depth} ) {
 			$self->SUPER::end_document();
 			$self->set_handler(undef);
+			delete $self->{"in_$elem"};
+		} else {
+			$self->{"in_$elem"}--;
 		}
-		$self->{"in_$elem"} = undef;
 	}
 }
 
@@ -88,7 +91,7 @@ __END__
 
 =head1 NAME
 
-HTTP::OAI::Record - Encapsulates OAI record XML data
+HTTP::OAI::Record - Encapsulates an OAI record
 
 =head1 SYNOPSIS
 
@@ -111,18 +114,42 @@ HTTP::OAI::Record - Encapsulates OAI record XML data
 
 =item $r = new HTTP::OAI::Record([header=>$header],[metadata=>$metadata],[about=>[$about]])
 
-This constructor method returns a new HTTP::OAI::Record object. Optionally set the header, metadata, and add an about.
+This constructor method returns a new C<HTTP::OAI::Record object>. Optionally set the header, metadata, and add an about.
 
 =item $r->header([HTTP::OAI::Header])
 
-Returns and optionally sets the record header (an L<HTTP::OAI::Header|HTTP::OAI::Header> object).
+Returns and optionally sets the record header (an L<HTTP::OAI::Header> object).
 
 =item $r->metadata([HTTP::OAI::Metadata])
 
-Returns and optionally sets the record metadata (an L<HTTP::OAI::Metadata|HTTP::OAI::Metadata> object).
+Returns and optionally sets the record metadata (an L<HTTP::OAI::Metadata> object).
 
 =item $r->about([HTTP::OAI::Metadata])
 
-Optionally adds a new About record (an L<HTTP::OAI::Metadata|HTTP::OAI::Metadata> object) and returns a list of about returns.
+Optionally adds a new About record (an L<HTTP::OAI::Metadata> object) and returns an array of objects (may be empty).
+
+=back
+
+=head2 Header Accessor Methods
+
+These methods are equivalent to C<$rec->header->$method([$value])>.
+
+=over 4
+
+=item $r->identifier([$identifier])
+
+Get and optionally set the record OAI identifier.
+
+=item $r->datestamp([$datestamp])
+
+Get and optionally set the record datestamp.
+
+=item $r->status([$status])
+
+Get and optionally set the record status (valid values are 'deleted' or undef).
+
+=item $r->is_deleted()
+
+Returns whether this record's status is deleted.
 
 =back

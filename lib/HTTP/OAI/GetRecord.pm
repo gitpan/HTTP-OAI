@@ -48,8 +48,8 @@ sub generate_body {
 
 sub start_element {
 	my ($self,$hash) = @_;
-	my $elem = $hash->{Name};
-	if( $elem eq 'record' && !$self->{"in_$elem"} ) {
+	my $elem = $hash->{LocalName};
+	if( $elem eq 'record' && !exists($self->{"in_record"}) ) {
 		$self->{OLDHandler} = $self->get_handler;
 		my $rec = HTTP::OAI::Record->new(
 			version=>$self->version,
@@ -57,7 +57,7 @@ sub start_element {
 		);
 		$self->record($rec);
 		$self->set_handler($rec);
-		$self->{"in_$elem"} = $hash->{Depth};
+		$self->{"in_record"} = $hash->{Depth};
 	}
 	$self->SUPER::start_element($hash);
 }
@@ -65,8 +65,10 @@ sub start_element {
 sub end_element {
 	my ($self,$hash) = @_;
 	$self->SUPER::end_element($hash);
-	my $elem = lc($hash->{Name});
-	if( $elem eq 'record' && $self->{"in_$elem"} == $hash->{Depth} ) {
+	my $elem = lc($hash->{LocalName});
+	if( $elem eq 'record' &&
+		exists($self->{"in_record"}) &&
+		$self->{"in_record"} == $hash->{Depth} ) {
 		$self->set_handler($self->{OLDHandler});
 	}
 }

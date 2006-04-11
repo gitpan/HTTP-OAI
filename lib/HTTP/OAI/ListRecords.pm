@@ -19,7 +19,7 @@ sub new {
 	my $self = $class->SUPER::new(%args);
 	
 	$self->{record} ||= [];
-	$self->verb('ListRecords') unless $self->verb;
+	$self->{onRecord} = $args{onRecord};
 
 	$self;
 }
@@ -28,6 +28,7 @@ sub resumptionToken { shift->headers->header('resumptionToken',@_) }
 
 sub record {
 	my $self = shift;
+	return $self->{onRecord}->($_[0]) if @_ and defined($self->{onRecord});
 	push(@{$self->{record}}, @_);
 	return wantarray ?
 		@{$self->{record}} :
@@ -36,12 +37,11 @@ sub record {
 
 sub next {
 	my $self = shift;
-	my $value = shift @{$self->{record}};
-	return $value if $value;
-	return undef if (!$self->harvestAgent->resume || !$self->resumptionToken || $self->resumptionToken->is_empty);
+	return shift @{$self->{record}} if @{$self->{record}};
+	return undef if (!$self->resumptionToken or $self->resumptionToken->is_empty or !$self->harvestAgent->resume);
 
-	my $r = $self->resume(resumptionToken=>$self->resumptionToken);
-	return $r->is_success ? $self->next : $r;
+	$self->resume(resumptionToken=>$self->resumptionToken);
+	return $self->is_success ? $self->next : undef;
 }
 
 sub generate_body {
@@ -61,20 +61,31 @@ sub generate_body {
 sub start_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
-	if( $elem eq 'header' ) {
-		if( !$self->{"in_$elem"} || $self->{"in_$elem"} == $hash->{Depth} ) {
-			$self->record(my $header = new HTTP::OAI::Record(
+	if( $elem eq 'record' ) {
+		if( !$self->{"in_record"} ) {
+			my $rec = new HTTP::OAI::Record(
 					version=>$self->version,
 					handlers=>$self->{handlers},
-				));
-			$self->set_handler($header);
-			$self->{"in_$elem"} = $hash->{Depth};
+			);
+			$self->set_handler($rec);
+			$self->{"in_record"} = $hash->{Depth};
 		}
 	} elsif( $elem eq 'resumptiontoken' ) {
 		$self->resumptionToken(my $rt = new HTTP::OAI::ResumptionToken(version=>$self->version));
 		$self->set_handler($rt);
 	}
 	$self->SUPER::start_element($hash);
+}
+
+sub end_element {
+	my ($self,$hash) = @_;
+	my $elem = lc($hash->{LocalName});
+	$self->SUPER::end_element($hash);
+	if( $elem eq 'record' and $self->{"in_record"} == $hash->{Depth} ) {
+		$self->record( $self->get_handler );
+		$self->set_handler( undef );
+		$self->{"in_record"} = 0;
+	}
 }
 
 1;
@@ -87,15 +98,28 @@ HTTP::OAI::ListRecords - Provide access to an OAI ListRecords response
 
 =head1 SYNOPSIS
 
-	my $r = $h->ListRecords(-metadataPrefix=>'oai_dc');
-
-	die $r->message if $r->is_error;
+	my $r = $h->ListRecords(
+		metadataPrefix=>'oai_dc',
+	);
 
 	while( my $rec = $r->next ) {
-		die $rec->message if $rec->is_error;
 		print "Identifier => ", $rec->identifier, "\n";
 	}
+	
+	die $r->message if $r->is_error;
 
+	# Using callback method
+	sub callback {
+		my $rec = shift;
+		print "Identifier => ", $rec->identifier, "\n";
+	};
+	my $r = $h->ListRecords(
+		metadataPrefix=>'oai_dc',
+		onRecord=>\&callback
+	);
+	while( $r->next ) {}
+	die $r->message if $r->is_error;
+	
 =head1 METHODS
 
 =over 4

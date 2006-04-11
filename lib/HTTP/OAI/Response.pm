@@ -1,5 +1,19 @@
 package HTTP::OAI::Response;
 
+=head1 NAME
+
+HTTP::OAI::Response - An OAI response
+
+=head1 DESCRIPTION
+
+C<HTTP::OAI::Response> inherits from L<HTTP::Response> and supplies some utility methods for OAI.
+
+=head1 METHODS
+
+=over 4
+
+=cut
+
 use vars qw($BAD_REPLACEMENT_CHAR @ISA);
 
 our $USE_EVAL = 1;
@@ -23,15 +37,20 @@ use HTTP::OAI::SAXHandler qw/ :SAX /;
 @ISA = qw( HTTP::Response XML::SAX::Base );
 $BAD_REPLACEMENT_CHAR = '?';
 
-# Attempt to get the time zone offset (+hh:mm)
+=item $r = new HTTP::OAI::Response([responseDate=>$rd][, requestURL=>$ru])
+
+This constructor method returns a new HTTP::OAI::Response object. Optionally set the responseDate and requestURL.
+
+Use $r->is_error to test whether the request was successful. In addition to the HTTP response codes, the following codes may be returned:
+
+600 - Error parsing XML or invalid OAI response
+
+Use $r->message to obtain a human-readable error message.
+
+=cut
 
 sub new {
 	my ($class,%args) = @_;
-	#$args{handlers} ||= {};
-	#$args{headers} = new HTTP::OAI::Headers(handlers=>$args{handlers});
-	#$args{errors} ||= [];
-	#$args{resume} = 1 unless exists $args{resume};
-	#my $self = bless \%args, ref($class) || $class;
 	my $self = $class->SUPER::new(
 		$args{code},
 		$args{message}
@@ -74,6 +93,35 @@ sub new {
 
 	return $self;
 }
+
+=item $r->copy_from( $r )
+
+Copies an L<HTTP::Response> $r into this object.
+
+=cut
+
+sub copy_from
+{
+	my( $self, $r ) = @_;
+
+	# The DOM stuff will break if headers isn't an HTTP::OAI::Headers object
+	$self->{_headers}->{$_} = $r->{_headers}->{$_}
+		for keys %{$r->{_headers}};
+
+	$self->{_content} = $r->{_content};
+
+	$self->code( $r->code );
+	$self->message( $r->message );
+	$self->request( $r->request );
+
+	$self;
+}
+
+=item $headers = $r->headers
+
+Returns an  L<HTTP::OAI::Headers> object.
+
+=cut
 
 sub parse_file {
 	my ($self, $fh) = @_;
@@ -175,9 +223,8 @@ sub resume {
 	do {
 		$response = $ha->request(\%args, undef, undef, undef, $self);
 	} while(
-		$tries-- &&
-		$response->is_error &&
-		$response->code ne 600 &&
+		!$response->is_success and
+		$tries-- and
 		sleep(60)
 	);
 
@@ -229,7 +276,12 @@ sub toDOM {
 	$builder->result;
 }
 
-#sub headers { shift->{headers} }
+=item $errs = $r->errors([$err])
+
+Returns and optionally adds to the OAI error list. Returns a reference to an array.
+
+=cut
+
 sub errors {
 	my $self = shift;
 	push @{$self->{errors}}, @_;
@@ -244,22 +296,54 @@ sub errors {
 	@{$self->{errors}};
 }
 
+sub next { undef }
+
+=item $rd = $r->responseDate( [$rd] )
+
+Returns and optionally sets the response date.
+
+=cut
+
 sub responseDate { shift->headers->header('responseDate',@_) }
+
+=item $ru = $r->requestURL( [$ru] )
+
+Returns and optionally sets the request URL.
+
+=cut
+
 sub requestURL {
 	my $self = shift;
 	$_[0] =~ s/;/&/sg if @_ && $_[0] !~ /&/;
 	$self->headers->header('requestURL',@_)
 }
-sub xslt { shift->headers->header('xslt',@_) }
+
+=item $verb = $r->verb( [$verb] )
+
+Returns and optionally sets the OAI verb.
+
+=cut
 
 sub verb { shift->headers->header('verb',@_) }
+
+=item $r->version
+
+Return the version of the OAI protocol used by the remote site (protocolVersion is automatically changed by the underlying API).
+
+=cut
+
 sub version { shift->headers->header('version',@_) }
 
-sub is_error {
-	my $self = shift;
-	# HTTP::Response doesn't return error if code = 0
-	return $self->code != 200;
-}
+=item $r->xslt( $url )
+
+Set the stylesheet to use in a response.
+
+=cut
+
+sub xslt { shift->headers->header('xslt',@_) }
+
+# HTTP::Response::is_error doesn't consider 0 an error
+sub is_error { return shift->code != 200 }
 
 sub end_element {
 	my ($self,$hash) = @_;
@@ -301,50 +385,6 @@ sub fix_xml {
 1;
 
 __END__
-
-=head1 NAME
-
-HTTP::OAI::Response - An OAI response
-
-=head1 METHODS
-
-=over 4
-
-=item $r = new HTTP::OAI::Response([responseDate=>$rd][, requestURL=>$ru])
-
-This constructor method returns a new HTTP::OAI::Response object. Optionally set the responseDate and requestURL.
-
-Use $r->is_error to test whether the request was successful. In addition to the HTTP response codes, the following codes may be returned:
-
-600 - Error parsing XML or invalid OAI response
-
-Use $r->message to obtain a human-readable error message.
-
-=item $headers = $r->headers
-
-Returns the embedded L<HTTP::OAI::Headers|HTTP::OAI::Headers> object.
-
-=item $r->code
-
-=item $r->message
-
-Returns the HTTP code (600 if there was an error with the OAI response) and a human-readable message.
-
-=item $errs = $r->errors([$err])
-
-Returns and optionally adds to the OAI error list. Returns a reference to an array.
-
-=item $rd = $r->responseDate([$rd])
-
-=item $ru = $r->requestURL([$ru])
-
-=item $verb = $r->verb([$verb])
-
-These methods are wrappers around the Header fields of the same name.
-
-=item $r->version
-
-Return the version of the OAI protocol used by the remote site (protocolVersion is automatically changed by the underlying API).
 
 =back
 

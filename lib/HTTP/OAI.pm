@@ -17,6 +17,12 @@ HTTP::OAI - API for the OAI-PMH
 
 This is a stub module, you probably want to look at L<HTTP::OAI::Harvester|HTTP::OAI::Harvester> or L<HTTP::OAI::Repository|HTTP::OAI::Repository>.
 
+=head1 SEE ALSO
+
+You can find links to this and other OAI tools (perl, C++, java) at: http://www.openarchives.org/tools/tools.html.
+
+Ed Summers L<Net::OAI::Harvester> module.
+
 =head1 AUTHOR
 
 Copyright 2004 Tim Brody <tdb01r@ecs.soton.ac.uk>

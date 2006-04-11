@@ -10,9 +10,12 @@ use vars qw( @ISA );
 
 sub new {
 	my $class = shift;
+	my %args = @_;
+	
 	my $self = $class->SUPER::new(@_);
+
 	$self->{identifier} ||= [];
-	$self->verb('ListIdentifiers') unless $self->verb;
+	$self->{onRecord} = $args{onRecord};
 
 	$self;
 }
@@ -21,6 +24,7 @@ sub resumptionToken { shift->headers->header('resumptionToken',@_) }
 
 sub identifier {
 	my $self = shift;
+	return $self->{onRecord}->($_[0]) if @_ and defined($self->{onRecord});
 	push(@{$self->{identifier}}, @_);
 	return wantarray ?
 		@{$self->{identifier}} :
@@ -29,12 +33,11 @@ sub identifier {
 
 sub next {
 	my $self = shift;
-	my $value = shift @{$self->{identifier}};
-	return $value if $value;
+	return shift @{$self->{identifier}} if @{$self->{identifier}};
 	return undef if (!$self->{'resume'} || !$self->resumptionToken || $self->resumptionToken->is_empty);
 
-	my $r = $self->resume(resumptionToken=>$self->resumptionToken);
-	return $r->is_success ? $self->next : $r;
+	$self->resume(resumptionToken=>$self->resumptionToken);
+	return $self->is_success ? $self->next : undef;
 }
 
 sub generate_body {
@@ -55,8 +58,7 @@ sub start_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
 	if( $elem eq 'header' ) {
-		$self->identifier(my $header = new HTTP::OAI::Header(version=>$self->version));
-		$self->{Old_handler} = $self->get_handler();
+		my $header = new HTTP::OAI::Header(version=>$self->version);
 		$self->set_handler($header);
 	} elsif( $elem eq 'resumptiontoken' ) {
 		$self->resumptionToken(my $rt = new HTTP::OAI::ResumptionToken(version=>$self->version));
@@ -70,8 +72,8 @@ sub end_element {
 	my $elem = lc($hash->{LocalName});
 	$self->SUPER::end_element($hash);
 	if( $elem eq 'header' ) {
-		$self->SUPER::end_document();
-		$self->set_handler($self->{Old_handler});
+		$self->identifier( $self->get_handler );
+		$self->set_handler( undef );
 	}
 	# OAI 1.x
 	if( $self->version eq '1.1' && $elem eq 'identifier' ) {
@@ -95,14 +97,13 @@ OAI::ListIdentifiers - Provide access to an OAI ListIdentifiers response
 
 	my $r = $h->ListIdentifiers;
 
-	die $r->message if $r->is_error;
-
 	while(my $rec = $r->next) {
-		die $rec->message if $rec->is_error;
 		print "identifier => ", $rec->identifier, "\n",
 		print "datestamp => ", $rec->datestamp, "\n" if $rec->datestamp;
 		print "status => ", ($rec->status || 'undef'), "\n";
 	}
+	
+	die $r->message if $r->is_error;
 
 =head1 METHODS
 
