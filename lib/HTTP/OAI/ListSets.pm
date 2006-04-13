@@ -1,12 +1,10 @@
 package HTTP::OAI::ListSets;
 
 use HTTP::OAI::Set;
-use HTTP::OAI::ResumptionToken;
-
-use HTTP::OAI::Response;
+use HTTP::OAI::PartialList;
 
 use vars qw( @ISA );
-@ISA = qw( HTTP::OAI::Response );
+@ISA = qw( HTTP::OAI::PartialList );
 
 sub new {
 	my ($class,%args) = @_;
@@ -16,31 +14,12 @@ sub new {
 	
 	my $self = $class->SUPER::new(%args);
 	
-	$self->{set} ||= [];
-	$self->{onRecord} = $args{onRecord};
+	$self->{in_set} = 0;
 
 	$self;
 }
-
-sub resumptionToken { shift->headers->header('resumptionToken',@_) }
-
-sub set {
-	my $self = shift;
-	return $self->{onRecord}->($_[0]) if @_ and defined($self->{onRecord});
-	push(@{$self->{set}}, @_);
-	return wantarray ?
-		@{$self->{set}} :
-		$self->{set}->[0];
-}
-
-sub next {
-	my $self = shift;
-	return shift @{$self->{set}} if @{$self->{set}};
-	return undef if (!$self->{'resume'} || !$self->resumptionToken || $self->resumptionToken->is_empty);
-
-	$self->resume(resumptionToken=>$self->resumptionToken);
-	return $self->is_success ? $self->next : undef;
-}
+ 
+sub set { shift->item(@_) }
 
 sub generate_body {
 	my ($self) = @_;
@@ -59,28 +38,38 @@ sub generate_body {
 sub start_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{Name});
-	if( $elem eq 'set' ) {
-		if( !$self->{in_set} ) {
+	if( !$self->{in_set} ) {
+		if( $elem eq 'set' ) {
 			$self->set_handler(new HTTP::OAI::Set(
 				version=>$self->version,
 				handlers=>$self->{handlers}
 			));
-			$self->{in_set} = $hash->{Depth};
+			$self->{'in_set'} = $hash->{Depth};
+		} elsif( $elem eq 'resumptiontoken' ) {
+			$self->set_handler(new HTTP::OAI::ResumptionToken(
+				version=>$self->version
+			));
+			$self->{'in_set'} = $hash->{Depth};
 		}
-	} elsif( $elem eq 'resumptiontoken' ) {
-		$self->resumptionToken(my $rt = new HTTP::OAI::ResumptionToken(version=>$self->version));
-		$self->set_handler($rt);
 	}
 	$self->SUPER::start_element($hash);
 }
 
 sub end_element {
 	my ($self,$hash) = @_;
+	my $elem = lc($hash->{LocalName});
 	$self->SUPER::end_element($hash);
-	if( lc($hash->{Name}) eq 'set' and $self->{in_set} == $hash->{Depth} ) {
-		$self->set( $self->get_handler );
-		$self->set_handler( undef );
-		$self->{in_set} = 0;
+	if( $self->{'in_set'} == $hash->{Depth} )
+	{
+		if( $elem eq 'set' ) {
+			$self->set( $self->get_handler );
+			$self->set_handler( undef );
+			$self->{in_set} = 0;
+		} elsif( $elem eq 'resumptionToken' ) {
+			$self->resumptionToken( $self->get_handler );
+			$self->set_handler( undef );
+			$self->{in_set} = 0;
+		}
 	}
 }
 

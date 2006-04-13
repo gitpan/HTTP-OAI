@@ -227,8 +227,6 @@ sub ListIdentifiers {
 		onRecord => $cb,
 	);
 
-	while( my $rec = $r->next ) { }
-
 	print "\nRead a total of $c records\n";
 
 	return if iserror($r);

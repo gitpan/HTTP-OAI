@@ -1,12 +1,10 @@
 package HTTP::OAI::ListIdentifiers;
 
 use HTTP::OAI::Header;
-use HTTP::OAI::ResumptionToken;
-
-use HTTP::OAI::Response;
+use HTTP::OAI::PartialList;
 
 use vars qw( @ISA );
-@ISA = qw( HTTP::OAI::Response );
+@ISA = qw( HTTP::OAI::PartialList );
 
 sub new {
 	my $class = shift;
@@ -14,31 +12,12 @@ sub new {
 	
 	my $self = $class->SUPER::new(@_);
 
-	$self->{identifier} ||= [];
-	$self->{onRecord} = $args{onRecord};
+	$self->{in_record} = 0;
 
 	$self;
 }
 
-sub resumptionToken { shift->headers->header('resumptionToken',@_) }
-
-sub identifier {
-	my $self = shift;
-	return $self->{onRecord}->($_[0]) if @_ and defined($self->{onRecord});
-	push(@{$self->{identifier}}, @_);
-	return wantarray ?
-		@{$self->{identifier}} :
-		$self->{identifier}->[0];
-}
-
-sub next {
-	my $self = shift;
-	return shift @{$self->{identifier}} if @{$self->{identifier}};
-	return undef if (!$self->{'resume'} || !$self->resumptionToken || $self->resumptionToken->is_empty);
-
-	$self->resume(resumptionToken=>$self->resumptionToken);
-	return $self->is_success ? $self->next : undef;
-}
+sub identifier { shift->item(@_) }
 
 sub generate_body {
 	my ($self) = @_;
@@ -58,11 +37,13 @@ sub start_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
 	if( $elem eq 'header' ) {
-		my $header = new HTTP::OAI::Header(version=>$self->version);
-		$self->set_handler($header);
+		$self->set_handler(new HTTP::OAI::Header(
+			version=>$self->version
+		));
 	} elsif( $elem eq 'resumptiontoken' ) {
-		$self->resumptionToken(my $rt = new HTTP::OAI::ResumptionToken(version=>$self->version));
-		$self->set_handler($rt);
+		$self->set_handler(new HTTP::OAI::ResumptionToken(
+			version=>$self->version
+		));
 	}
 	$self->SUPER::start_element($hash);
 }
@@ -73,6 +54,9 @@ sub end_element {
 	$self->SUPER::end_element($hash);
 	if( $elem eq 'header' ) {
 		$self->identifier( $self->get_handler );
+		$self->set_handler( undef );
+	} elsif( $elem eq 'resumptiontoken' ) {
+		$self->resumptionToken( $self->get_handler );
 		$self->set_handler( undef );
 	}
 	# OAI 1.x

@@ -59,7 +59,7 @@ sub new {
 	$self->{handlers} = $args{handlers} || {};
 	$self->{_headers} = new HTTP::OAI::Headers(handlers=>$args{handlers});
 	$self->{errors} = $args{errors} || [];
-	$self->{resume} = defined($args{resume}) ? $args{resume} : 1;
+	$self->{resume} = $args{resume};
 
 	# Force the version of OAI to try to parse
 	$self->version($args{version});
@@ -206,9 +206,9 @@ sub harvestAgent { shift->headers->header('harvestAgent',@_) }
 # Resume a request using a resumptionToken
 sub resume {
 	my ($self,%args) = @_;
-	my $ha = $args{harvestAgent} || $self->harvestAgent || croak ref($self)."::resume Required argument harvestAgent is undefined";
-	my $token = $args{resumptionToken} || croak ref($self)."::resume Required argument resumptionToken is undefined";
-	my $verb = $args{verb} || $self->verb || croak ref($self)."::resume Required argument verb is undefined";
+	my $ha = $args{harvestAgent} || $self->harvestAgent || Carp::confess "Required argument harvestAgent is undefined";
+	my $token = $args{resumptionToken} || Carp::confess "Required argument resumptionToken is undefined";
+	my $verb = $args{verb} || $self->verb || Carp::confess "Required argument verb is undefined";
 
 	my $response;
 	%args = (
@@ -217,8 +217,11 @@ sub resume {
 		resumptionToken=>(ref $token ? $token->resumptionToken : $token),
 	);
 	$self->headers->{_args} = \%args;
-	$self->resumptionToken(undef);
-	# Retry the request 3 times (leave a minute between retries)
+
+	# Reset the resumptionToken
+	$self->headers->header('resumptionToken',undef);
+	
+	# Retry the request upto 3 times (leave a minute between retries)
 	my $tries = 3;
 	do {
 		$response = $ha->request(\%args, undef, undef, undef, $self);
@@ -228,9 +231,9 @@ sub resume {
 		sleep(60)
 	);
 
-	if( $self->resumptionToken &&
-		defined($self->resumptionToken->resumptionToken) &&
-		($self->resumptionToken->resumptionToken eq $token->resumptionToken) ) {
+	if( $self->resumptionToken and
+		!$self->resumptionToken->is_empty and
+		$self->resumptionToken->resumptionToken eq $token->resumptionToken ) {
 		$self->code(600);
 		$self->message("Flow-control error: Resumption token hasn't changed (" . $response->request->uri . ").");
 	}

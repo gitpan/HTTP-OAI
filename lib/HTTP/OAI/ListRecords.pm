@@ -1,12 +1,10 @@
 package HTTP::OAI::ListRecords;
 
 use HTTP::OAI::Record;
-use HTTP::OAI::ResumptionToken;
-
-use HTTP::OAI::Response;
+use HTTP::OAI::PartialList;
 
 use vars qw( @ISA );
-@ISA = qw( HTTP::OAI::Response );
+@ISA = qw( HTTP::OAI::PartialList );
 
 sub new {
 	my ($class,%args) = @_;
@@ -18,31 +16,12 @@ sub new {
 
 	my $self = $class->SUPER::new(%args);
 	
-	$self->{record} ||= [];
-	$self->{onRecord} = $args{onRecord};
+	$self->{in_record} = 0;
 
 	$self;
 }
 
-sub resumptionToken { shift->headers->header('resumptionToken',@_) }
-
-sub record {
-	my $self = shift;
-	return $self->{onRecord}->($_[0]) if @_ and defined($self->{onRecord});
-	push(@{$self->{record}}, @_);
-	return wantarray ?
-		@{$self->{record}} :
-		$self->{record}->[0];
-}
-
-sub next {
-	my $self = shift;
-	return shift @{$self->{record}} if @{$self->{record}};
-	return undef if (!$self->resumptionToken or $self->resumptionToken->is_empty or !$self->harvestAgent->resume);
-
-	$self->resume(resumptionToken=>$self->resumptionToken);
-	return $self->is_success ? $self->next : undef;
-}
+sub record { shift->item(@_) }
 
 sub generate_body {
 	my ($self) = @_;
@@ -61,18 +40,19 @@ sub generate_body {
 sub start_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
-	if( $elem eq 'record' ) {
-		if( !$self->{"in_record"} ) {
-			my $rec = new HTTP::OAI::Record(
+	if( !$self->{'in_record'} ) {
+		if( $elem eq 'record' ) {
+			$self->set_handler(new HTTP::OAI::Record(
 					version=>$self->version,
 					handlers=>$self->{handlers},
-			);
-			$self->set_handler($rec);
-			$self->{"in_record"} = $hash->{Depth};
+			));
+			$self->{'in_record'} = $hash->{Depth};
+		} elsif( $elem eq 'resumptiontoken' ) {
+			$self->set_handler(new HTTP::OAI::ResumptionToken(
+				version=>$self->version
+			));
+			$self->{'in_record'} = $hash->{Depth};
 		}
-	} elsif( $elem eq 'resumptiontoken' ) {
-		$self->resumptionToken(my $rt = new HTTP::OAI::ResumptionToken(version=>$self->version));
-		$self->set_handler($rt);
 	}
 	$self->SUPER::start_element($hash);
 }
@@ -81,10 +61,16 @@ sub end_element {
 	my ($self,$hash) = @_;
 	my $elem = lc($hash->{LocalName});
 	$self->SUPER::end_element($hash);
-	if( $elem eq 'record' and $self->{"in_record"} == $hash->{Depth} ) {
-		$self->record( $self->get_handler );
-		$self->set_handler( undef );
-		$self->{"in_record"} = 0;
+	if( $self->{'in_record'} == $hash->{Depth} ) {
+		if( $elem eq 'record' ) {
+			$self->record( $self->get_handler );
+			$self->set_handler( undef );
+			$self->{'in_record'} = 0;
+		} elsif( $elem eq 'resumptiontoken' ) {
+			$self->resumptionToken( $self->get_handler );
+			$self->set_handler( undef );
+			$self->{'in_record'} = 0;
+		}
 	}
 }
 
@@ -117,7 +103,6 @@ HTTP::OAI::ListRecords - Provide access to an OAI ListRecords response
 		metadataPrefix=>'oai_dc',
 		onRecord=>\&callback
 	);
-	while( $r->next ) {}
 	die $r->message if $r->is_error;
 	
 =head1 METHODS

@@ -5,7 +5,7 @@ use 5.005; # 5.004 seems to have problems with use base
 use vars qw( @ISA $AUTOLOAD );
 use Carp;
 
-our $VERSION = '3.15';
+our $VERSION = '3.16';
 our $DEBUG = 0;
 
 use HTTP::OAI::UserAgent;
@@ -19,6 +19,7 @@ use HTTP::OAI::ListIdentifiers;
 use HTTP::OAI::ListMetadataFormats;
 use HTTP::OAI::ListRecords;
 use HTTP::OAI::ListSets;
+use HTTP::OAI::PartialList;
 
 use HTTP::OAI::Error;
 use HTTP::OAI::Metadata;
@@ -137,6 +138,7 @@ sub AUTOLOAD {
 
 	my $r = "HTTP::OAI::$name"->new(
 		harvestAgent => $self,
+		resume => $self->resume,
 		handlers => $handlers,
 		onRecord => $onRecord,
 	);
@@ -146,7 +148,6 @@ sub AUTOLOAD {
 	if( defined($self->{_static}) && !defined($self->{_records}) ) {
 		my $lmdf = HTTP::OAI::ListMetadataFormats->new(
 			handlers => $handlers,
-			onRecord => $onRecord,
 		);
 		$lmdf->headers->{_args} = {
 			%args,
@@ -161,7 +162,6 @@ sub AUTOLOAD {
 		for($lmdf->metadataFormat) {
 			my $lr = HTTP::OAI::ListRecords->new(
 				handlers => $handlers,
-				onRecord => $onRecord,
 			);
 			$lr->headers->{_args} = {
 				%args,
@@ -176,7 +176,12 @@ sub AUTOLOAD {
 	
 	# Make the remote request and return the result
 	if( !defined($self->{_records}) ) {
-		return $self->request({baseURL=>$self->baseURL,%args},undef,undef,undef,$r);
+		$r = $self->request({baseURL=>$self->baseURL,%args},undef,undef,undef,$r);
+		# Lets call next() for the user if she's using the callback interface
+		if( $onRecord and $r->is_success and $r->isa("HTTP::OAI::PartialList") ) {
+			$r->next;
+		}
+		return $r;
 	# Parse our memory copy of the static repository
 	} else {
 		$r->code(200);

@@ -5,6 +5,8 @@ use HTTP::OAI::SAXHandler qw/ :SAX /;
 use HTTP::OAI::Metadata;
 @ISA = qw( HTTP::OAI::Encapsulation );
 
+use overload "bool" => \&not_empty;
+
 sub new {
 	my ($class,%args) = @_;
 	my $self = $class->SUPER::new(%args);
@@ -22,7 +24,8 @@ sub expirationDate { shift->_attr('expirationDate',@_) }
 sub completeListSize { shift->_attr('completeListSize',@_) }
 sub cursor { shift->_attr('cursor',@_) }
 
-sub is_empty { return !defined($_[0]->resumptionToken) || ($_[0]->resumptionToken eq '') }
+sub not_empty { defined($_[0]->resumptionToken) and length($_[0]->resumptionToken) > 0 }
+sub is_empty { !not_empty(@_) }
 
 sub generate {
 	my ($self) = @_;

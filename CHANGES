@@ -1,3 +1,9 @@
+3.16
+
+  - Fixed recursion bug in onRecord
+	- No longer need to call next() for onRecord (Harvester will do it for you)
+	- Added PartialList module (ListIdentifiers, ListRecords, ListSets)
+
 3.15
 
 	- Several bug fixes, particularly catching and throwing parsing errors
