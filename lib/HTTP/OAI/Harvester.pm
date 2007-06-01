@@ -1,30 +1,13 @@
 package HTTP::OAI::Harvester;
 
 use strict;
-use 5.005; # 5.004 seems to have problems with use base
-use vars qw( @ISA $AUTOLOAD );
-use Carp;
+use warnings;
 
-our $VERSION = '3.16';
+use vars qw( @ISA $AUTOLOAD );
+
 our $DEBUG = 0;
 
-use HTTP::OAI::UserAgent;
 @ISA = qw( HTTP::OAI::UserAgent );
-
-use HTTP::OAI::Repository; # validate_request
-
-use HTTP::OAI::GetRecord;
-use HTTP::OAI::Identify;
-use HTTP::OAI::ListIdentifiers;
-use HTTP::OAI::ListMetadataFormats;
-use HTTP::OAI::ListRecords;
-use HTTP::OAI::ListSets;
-use HTTP::OAI::PartialList;
-
-use HTTP::OAI::Error;
-use HTTP::OAI::Metadata;
-use HTTP::OAI::Record;
-use HTTP::OAI::Set;
 
 sub new {
 	my ($class,%args) = @_;
@@ -33,16 +16,17 @@ sub new {
 	my $self = $class->SUPER::new(%ARGS);
 
 	$self->{'resume'} = exists($args{resume}) ? $args{resume} : 1;
-	$DEBUG = $args{debug};
+	$DEBUG = $args{debug} if defined($args{debug});
+	$args{debug} = $DEBUG;
 	$self->{'handlers'} = $args{'handlers'};
 	$self->{'onRecord'} = $args{'onRecord'};
-	$self->agent('OAI-PERL/'.$VERSION);
+	$self->agent('OAI-PERL/'.$HTTP::OAI::VERSION);
 
 	# Record the base URL this harvester instance is associated with
 	$self->{repository} =
 		$args{repository} ||
 		HTTP::OAI::Identify->new(baseURL=>$args{baseURL});
-	croak "Requires repository or baseURL" unless $self->repository and $self->repository->baseURL;
+	Carp::croak "Requires repository or baseURL" unless $self->repository and $self->repository->baseURL;
 	# Canonicalise
 	$self->baseURL($self->baseURL);
 
@@ -61,14 +45,14 @@ sub repository {
 	# Don't clobber a good existing base URL with a bad one
 	if( $self->{repository} && $self->{repository}->baseURL ) {
 		if( !$id->baseURL ) {
-			carp "Attempt to set a non-existant baseURL";
+			Carp::carp "Attempt to set a non-existant baseURL";
 			$id->baseURL($self->baseURL);
 		} else {
 			my $uri = URI->new($id->baseURL);
 			if( $uri && $uri->scheme ) {
 				$id->baseURL($uri->canonical);
 			} else {
-				carp "Ignoring attempt to use an invalid base URL: " . $id->baseURL;
+				Carp::carp "Ignoring attempt to use an invalid base URL: " . $id->baseURL;
 				$id->baseURL($self->baseURL);
 			}
 		}
@@ -229,7 +213,7 @@ sub AUTOLOAD {
 
 sub interogate {
 	my $self = shift;
-	croak "Requires baseURL" unless $self->baseURL;
+	Carp::croak "Requires baseURL" unless $self->baseURL;
 	
 	warn "Requesting " . $self->baseURL . "\n" if $DEBUG;
 	my $r = $self->request(HTTP::Request->new(GET => $self->baseURL));

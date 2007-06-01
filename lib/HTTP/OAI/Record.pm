@@ -1,11 +1,10 @@
 package HTTP::OAI::Record;
 
+use strict;
+use warnings;
+
 use vars qw(@ISA);
 
-use Carp;
-use HTTP::OAI::Metadata;
-use HTTP::OAI::Header;
-use HTTP::OAI::Metadata;
 use HTTP::OAI::SAXHandler qw/ :SAX /;
 
 @ISA = qw(HTTP::OAI::Encapsulation);
@@ -36,6 +35,7 @@ sub about {
 sub identifier { shift->header->identifier(@_) }
 sub datestamp { shift->header->datestamp(@_) }
 sub status { shift->header->status(@_) }
+sub is_deleted { shift->header->is_deleted(@_) }
 
 sub generate {
 	my ($self) = @_;
@@ -64,8 +64,8 @@ sub start_element {
 			die sprintf("Error getting handler for <%s> (failed to create new %s)", $elem, $self->{handlers}->{$elem});
 		$self->set_handler($handler);
 		$self->$elem($handler);
-		$self->SUPER::start_document();
 		$self->{"in_$elem"} = $hash->{Depth};
+		g_start_document( $handler );
 	}
 	$self->SUPER::start_element($hash);
 }

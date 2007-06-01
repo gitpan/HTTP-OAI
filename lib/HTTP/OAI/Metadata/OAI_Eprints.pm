@@ -1,8 +1,11 @@
 package HTTP::OAI::Metadata::OAI_Eprints;
 
+use strict;
+use warnings;
+
+use Carp;
 use XML::LibXML;
 use HTTP::OAI::Metadata;
-use Carp;
 
 use vars qw( @ISA );
 @ISA = qw( HTTP::OAI::Metadata );
@@ -16,7 +19,7 @@ sub new {
 	$root->setAttribute('xmlns:xsi','http://www.w3.org/2001/XMLSchema-instance');
 	$root->setAttribute('xsi:schemaLocation','http://www.openarchives.org/OAI/1.1/eprints http://www.openarchives.org/OAI/1.1/eprints.xsd');
 	for(qw( content metadataPolicy dataPolicy submissionPolicy )) {
-		croak "Required argument $_ undefined" if !defined($args{$_}) && $_ =~ /metadataPolicy|dataPolicy/;
+		Carp::croak "Required argument $_ undefined" if !defined($args{$_}) && $_ =~ /metadataPolicy|dataPolicy/;
 		next unless defined($args{$_});
 		my $node = $root->appendChild($dom->createElement($_));
 		$args{$_}->{'URL'} ||= [];
@@ -32,7 +35,7 @@ sub new {
 	for(@{$args{'comment'}}) {
 		$root->appendChild($dom->createElement('comment'))->appendChild($dom->createTextNode($_));
 	}
-	$self->dom($root);
+	$self->dom($dom);
 	$self;
 }
 

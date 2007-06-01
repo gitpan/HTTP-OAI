@@ -2,14 +2,12 @@ package HTTP::OAI::Header;
 
 use strict;
 use warnings;
+
 use POSIX qw/strftime/;
 
 use vars qw(@ISA);
 
-use HTTP::OAI::Metadata;
 use HTTP::OAI::SAXHandler qw( :SAX );
-use XML::LibXML::SAX;
-use XML::LibXML::SAX::Parser;
 
 @ISA = qw(HTTP::OAI::Encapsulation);
 
@@ -57,7 +55,7 @@ sub dom {
 		$driver->generate($dom->ownerDocument);
 	} else {
 		$self->set_handler(my $builder = XML::LibXML::SAX::Builder->new());
-		$self->start_document();
+		g_start_document($self);
 		$self->xml_decl({'Version'=>'1.0','Encoding'=>'UTF-8'});
 		$self->characters({'Data'=>"\n"});
 		$self->generate();

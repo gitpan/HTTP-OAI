@@ -3,9 +3,6 @@ package HTTP::OAI::PartialList;
 use strict;
 use warnings;
 
-use HTTP::OAI::ResumptionToken;
-use HTTP::OAI::Response;
-
 use vars qw( @ISA );
 @ISA = qw( HTTP::OAI::Response );
 

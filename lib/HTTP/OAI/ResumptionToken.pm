@@ -1,8 +1,11 @@
 package HTTP::OAI::ResumptionToken;
 
-use vars qw( @ISA );
+use strict;
+use warnings;
+
 use HTTP::OAI::SAXHandler qw/ :SAX /;
-use HTTP::OAI::Metadata;
+
+use vars qw( @ISA );
 @ISA = qw( HTTP::OAI::Encapsulation );
 
 use overload "bool" => \&not_empty;

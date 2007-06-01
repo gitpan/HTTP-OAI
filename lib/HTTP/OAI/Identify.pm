@@ -1,7 +1,8 @@
 package HTTP::OAI::Identify;
 
-use HTTP::OAI::Response;
-use HTTP::OAI::Metadata;
+use strict;
+use warnings;
+
 use HTTP::OAI::SAXHandler qw( :SAX );
 
 use vars qw( @ISA );
@@ -87,8 +88,8 @@ sub start_element {
 		$self->{OLDHandler} = $self->get_handler();
 		$self->set_handler(my $handler = $self->{handlers}->{$elem}->new());
 		$self->description($handler);
-		$self->SUPER::start_document();
 		$self->{"in_$elem"} = $hash->{Depth};
+		g_start_document($handler);
 	}
 }
 

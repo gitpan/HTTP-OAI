@@ -1,10 +1,9 @@
 package HTTP::OAI::Headers;
 
-use URI;
-use Carp;
+use strict;
+use warnings;
 
 use HTTP::OAI::SAXHandler qw( :SAX );
-use HTTP::Headers;
 
 use vars qw( @ISA );
 
@@ -49,7 +48,7 @@ sub set_error
 		$self->get_handler->errors($error);
 		$self->get_handler->code($code);
 	} else {
-		carp ref($self)." tried to set_error without having a handler to set it on!";
+		Carp::carp ref($self)." tried to set_error without having a handler to set it on!";
 	}
 }
 sub generate_start {
@@ -110,13 +109,12 @@ sub generate_start {
 			'NamespaceURI'=>'',
 		};
 	}
+	$uri->query( undef );
 	g_data_element($handler,
 		'http://www.openarchives.org/OAI/2.0/',
 		'request',
 		$attr,
-		($uri->query ?
-			substr($uri->as_string(),0,length($uri->as_string())-length($uri->query)-1) :
-			$uri->as_string)
+		$uri->as_string
 	);
 }
 

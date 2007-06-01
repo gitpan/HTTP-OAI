@@ -1,6 +1,8 @@
 package HTTP::OAI::Set;
 
-use HTTP::OAI::Metadata;
+use strict;
+use warnings;
+
 use HTTP::OAI::SAXHandler qw/ :SAX /;
 
 use vars qw( @ISA );
@@ -46,7 +48,7 @@ sub start_element {
 	if( $elem eq 'setdescription' ) {
 		$self->setDescription(my $d = $self->{handlers}->{description}->new(version=>$self->version));
 		$self->set_handler($d);
-		$self->SUPER::start_document();
+		g_start_document($d);
 	}
 	$self->SUPER::start_element($hash);
 }

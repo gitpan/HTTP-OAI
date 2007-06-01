@@ -1,3 +1,20 @@
+3.18
+	- broke apart Metadata from Encapsulation
+	- now uses XML::SAX in Response, rt.cpan.org ticket #27191
+	- shifted all use's into HTTP::OAI
+	- added use strict(), use warnings() to every module
+	- shifted $VERSION in HTTP::OAI
+	- href attribute lookup in METS should be namespaced too
+	- added mets test case
+	- fixed test cases for changed XML output
+
+3.17
+
+	- Removed next() call from oai_browser for List*
+	- Fixed missing HTTP:: in ListIdentifiers documentation
+	- Fixed missing namespace initialization in SAX
+	- Fixed bug in request where '?' wasn't being removed
+
 3.16
 
   - Fixed recursion bug in onRecord

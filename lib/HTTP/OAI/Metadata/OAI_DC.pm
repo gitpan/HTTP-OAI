@@ -1,8 +1,10 @@
 package HTTP::OAI::Metadata::OAI_DC;
 
+use strict;
+use warnings;
+
 use HTTP::OAI::Metadata;
 
-use strict;
 use vars qw(@ISA @DC_TERMS);
 
 @ISA = qw(HTTP::OAI::Metadata);
@@ -23,7 +25,7 @@ sub new {
 				$dc->appendChild($dom->createElement("dc:".lc($_)))->appendChild($dom->createTextNode($value));
 			}
 		}
-		$self->dom($dc);
+		$self->dom($dom);
 	}
 	for(@DC_TERMS) {
 		$self->{dc}->{$_} ||= [];
@@ -74,7 +76,7 @@ sub metadata {
 		$dc->appendChild($dom->createElement("dc:".$_->localName))->appendChild($dom->createTextNode($_->getFirstChild->toString));
 	}
 
-	$self->dom($dom->getDocumentElement)
+	$self->dom($dom)
 }
 
 sub toString {

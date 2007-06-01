@@ -1,5 +1,8 @@
 package HTTP::OAI::UserAgent;
 
+use strict;
+use warnings;
+
 use vars qw(@ISA $ACCEPT $PARSER);
 
 # Show debug messages
@@ -8,16 +11,6 @@ our $DEBUG = 0;
 our $USE_EVAL = 1;
 # Ignore bad utf8 characters
 our $IGNORE_BAD_CHARS = 1;
-
-use strict;
-use warnings;
-
-use HTTP::Request;
-use HTTP::Response;
-use URI;
-use Carp;
-use XML::LibXML;
-use Encode;
 
 require LWP::UserAgent;
 @ISA = qw(LWP::UserAgent);
@@ -49,7 +42,7 @@ sub request
 			Handler => $response->headers
 	));
 	$PARSER->{content_length} = 0;
-	$PARSER->{content_buffer} = encode('utf8','');
+	$PARSER->{content_buffer} = Encode::encode('utf8','');
 	$response->code(200);
 	$response->message('lwp_callback');
 	$response->headers->set_handler($response);
@@ -133,7 +126,7 @@ sub lwp_endparse
 	my $utf8 = $PARSER->{content_buffer};
 	# Replace bad chars with '?'
 	if( $IGNORE_BAD_CHARS and length($utf8) ) {
-		$utf8 = decode('utf8', $utf8, Encode::FB_PERLQQ|Encode::FB_WARN);
+		$utf8 = Encode::decode('utf8', $utf8, Encode::FB_PERLQQ|Encode::FB_WARN);
 		_ccchars(\$utf8); # Fix control chars
 	}
 	if( length($utf8) > 0 )
@@ -149,7 +142,7 @@ sub lwp_callback
 {
 	$PARSER->{content_buffer} .= $_[0];
 	# FB_QUIET won't split multi-byte chars on input
-	my $utf8 = decode('utf8', $PARSER->{content_buffer}, Encode::FB_QUIET);
+	my $utf8 = Encode::decode('utf8', $PARSER->{content_buffer}, Encode::FB_QUIET);
 	_ccchars(\$utf8); # Fix control chars
 	if( length($utf8) > 0 )
 	{
@@ -165,8 +158,8 @@ sub _ccchars {
 
 sub _buildurl {
 	my %attr = @_;
-	croak "_buildurl requires baseURL" unless $attr{'baseURL'};
-	croak "_buildurl requires verb" unless $attr{'verb'};
+	Carp::croak "_buildurl requires baseURL" unless $attr{'baseURL'};
+	Carp::croak "_buildurl requires verb" unless $attr{'verb'};
 	my $uri = new URI(delete($attr{'baseURL'}));
 	if( defined($attr{resumptionToken}) && !$attr{force} ) {
 		$uri->query_form(verb=>$attr{'verb'},resumptionToken=>$attr{'resumptionToken'});

@@ -1,5 +1,8 @@
 package HTTP::OAI::Response;
 
+use strict;
+use warnings;
+
 =head1 NAME
 
 HTTP::OAI::Response - An OAI response
@@ -20,18 +23,11 @@ our $USE_EVAL = 1;
 
 use utf8;
 
-use HTTP::Response;
-use XML::SAX::Base;
-use XML::LibXML;
 use POSIX qw/strftime/;
-use Carp;
-use URI;
 
 use CGI qw/-oldstyle_urls/;
 $CGI::USE_PARAM_SEMICOLON = 0;
 
-use HTTP::OAI::Headers;
-use HTTP::OAI::Error;
 use HTTP::OAI::SAXHandler qw/ :SAX /;
 
 @ISA = qw( HTTP::Response XML::SAX::Base );
@@ -129,7 +125,7 @@ sub parse_file {
 	$self->code(200);
 	$self->message('parse_file');
 	
-	my $parser = XML::LibXML::SAX::Parser->new(
+	my $parser = XML::SAX::ParserFactory->parser(
 		Handler=>HTTP::OAI::SAXHandler->new(
 			Handler=>$self->headers
 	));
@@ -164,7 +160,7 @@ sub parse_string {
 	$self->code(200);
 	$self->message('parse_string');
 	do {
-		my $parser = XML::LibXML::SAX->new(
+		my $parser = XML::SAX::ParserFactory->parser(
 			Handler=>HTTP::OAI::SAXHandler->new(
 				Handler=>$self->headers
 		));
@@ -225,6 +221,22 @@ sub resume {
 	my $tries = 3;
 	do {
 		$response = $ha->request(\%args, undef, undef, undef, $self);
+		unless( $response->is_success ) {
+			# If the token is expired, we need to break out (no point wasting 3
+			# minutes)
+			if( my @errors = $response->errors ) {
+				for( grep { $_->code eq 'badResumptionToken' } @errors ) {
+					$tries = 0;
+				}
+			}
+			if( $HTTP::OAI::Harvester::DEBUG ) {
+				warn sprintf("Error resuming using token [%s] %d [%s]\n",
+					$args{resumptionToken},
+					$response->code,
+					$response->message
+				);
+			}
+		}
 	} while(
 		!$response->is_success and
 		$tries-- and
@@ -246,7 +258,7 @@ sub generate {
 	return unless defined(my $handler = $self->get_handler);
 	$self->headers->set_handler($handler);
 
-	$handler->start_document();
+	g_start_document($handler);
 	$handler->xml_decl({'Version'=>'1.0','Encoding'=>'UTF-8'});
 	$handler->characters({'Data'=>"\n"});
 	if( $self->xslt ) {

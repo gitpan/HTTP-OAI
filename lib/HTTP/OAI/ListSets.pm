@@ -1,7 +1,7 @@
 package HTTP::OAI::ListSets;
 
-use HTTP::OAI::Set;
-use HTTP::OAI::PartialList;
+use strict;
+use warnings;
 
 use vars qw( @ISA );
 @ISA = qw( HTTP::OAI::PartialList );

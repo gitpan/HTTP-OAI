@@ -1,5 +1,8 @@
 package HTTP::OAI::Error;
 
+use strict;
+use warnings;
+
 use vars qw(@ISA @EXPORT @EXPORT_OK %EXPORT_TAG);
 
 use vars qw(
@@ -9,9 +12,7 @@ use vars qw(
 $PARSER = 600;
 
 use Exporter;
-use HTTP::OAI::Metadata;
 use HTTP::OAI::SAXHandler qw( :SAX );
-use Carp;
 
 @ISA = qw(HTTP::OAI::Encapsulation Exporter);
 
@@ -52,7 +53,7 @@ sub toString {
 sub generate {
 	my ($self) = @_;
 	return unless defined(my $handler = $self->get_handler);
-	croak ref($self)."::generate Error code undefined" unless defined($self->code);
+	Carp::croak ref($self)."::generate Error code undefined" unless defined($self->code);
 
 	g_data_element($handler,
 		'http://www.openarchives.org/OAI/2.0/',

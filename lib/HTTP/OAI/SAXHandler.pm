@@ -1,17 +1,18 @@
 package HTTP::OAI::SAXHandler;
 
 use strict;
+use warnings;
 
 use vars qw($DEBUG @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-use XML::SAX::Base;
-use Data::Dumper;
+
+use Data::Dumper; # debugging for here
 
 $DEBUG = 0;
 
 @ISA = qw( Exporter XML::SAX::Base );
 
-@EXPORT_OK = qw( g_start_element g_end_element g_data_element );
-%EXPORT_TAGS = (SAX=>[qw( g_start_element g_end_element g_data_element )]);
+@EXPORT_OK = qw( g_start_document g_start_element g_end_element g_data_element );
+%EXPORT_TAGS = (SAX=>[qw( g_start_document g_start_element g_end_element g_data_element )]);
 
 =pod
 
@@ -39,6 +40,19 @@ sub new {
 	my $self = $class->SUPER::new(%args);
 	$self->{Depth} = 0;
 	$self;
+}
+
+sub g_start_document {
+	my ($handler) = @_;
+	$handler->start_document();
+	$handler->start_prefix_mapping({
+			'Prefix'=>'xsi',
+			'NamespaceURI'=>'http://www.w3.org/2001/XMLSchema-instance'
+	});
+	$handler->start_prefix_mapping({
+			'Prefix'=>'',
+			'NamespaceURI'=>'http://www.openarchives.org/OAI/2.0/'
+	});
 }
 
 sub g_data_element {

@@ -1,6 +1,8 @@
 package HTTP::OAI::MetadataFormat;
 
-use HTTP::OAI::Metadata;
+use strict;
+use warnings;
+
 use HTTP::OAI::SAXHandler qw/ :SAX /;
 
 use vars qw( @ISA );

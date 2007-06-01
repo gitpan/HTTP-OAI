@@ -1,7 +1,7 @@
 package HTTP::OAI::ListIdentifiers;
 
-use HTTP::OAI::Header;
-use HTTP::OAI::PartialList;
+use strict;
+use warnings;
 
 use vars qw( @ISA );
 @ISA = qw( HTTP::OAI::PartialList );
@@ -75,7 +75,7 @@ __END__
 
 =head1 NAME
 
-OAI::ListIdentifiers - Provide access to an OAI ListIdentifiers response
+HTTP::OAI::ListIdentifiers - Provide access to an OAI ListIdentifiers response
 
 =head1 SYNOPSIS
 

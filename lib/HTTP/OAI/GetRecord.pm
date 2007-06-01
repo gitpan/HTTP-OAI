@@ -1,12 +1,11 @@
 package HTTP::OAI::GetRecord;
 
-use HTTP::OAI::Response;
-use HTTP::OAI::Record;
+use strict;
+use warnings;
+
 use HTTP::OAI::SAXHandler qw/ :SAX /;
 
 use vars qw(@ISA);
-
-use Carp;
 
 @ISA = qw( HTTP::OAI::Response );
 

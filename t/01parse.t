@@ -1,5 +1,6 @@
 use Test::More tests => 4;
 
+use IO::File;
 use HTTP::OAI;
 use HTTP::OAI::Metadata::OAI_DC;
 ok(1);

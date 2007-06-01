@@ -1,7 +1,8 @@
 package HTTP::OAI::Repository;
 
 use strict;
-use 5.005; # 5.004 seems to have problems with use base
+use warnings;
+
 use vars qw(@ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 require Exporter;
 

@@ -1,9 +1,9 @@
 package HTTP::OAI::ListMetadataFormats;
 
-use vars qw( @ISA );
+use strict;
+use warnings;
 
-use HTTP::OAI::Response;
-use HTTP::OAI::MetadataFormat;
+use vars qw( @ISA );
 
 @ISA = qw( HTTP::OAI::Response );
 

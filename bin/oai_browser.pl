@@ -44,11 +44,12 @@ BEGIN {
 use vars qw($VERSION $PROTOCOL_VERSION $h);
 
 use lib "../lib";
+use lib "lib";
 
 use HTTP::OAI;
 use Pod::Usage;
 
-$VERSION = $HTTP::OAI::Harvester::VERSION;
+$VERSION = $HTTP::OAI::VERSION;
 
 use vars qw( @ARCHIVES );
 @ARCHIVES = qw(
@@ -59,10 +60,11 @@ use vars qw( @ARCHIVES );
 );
 
 use strict;
-use utf8;
+use warnings;
 #use sigtrap qw( die INT ); # This is just confusing ...
 
 #binmode(STDOUT,":encoding(iso-8859-1)"); # Causes Out of memory! errors :-(
+binmode(STDOUT,":utf8");
 
 use Getopt::Long;
 use Term::ReadLine;
@@ -137,6 +139,9 @@ sub mainloop {
 		} elsif($cmd eq '6') {
 			eval { ListSets() };
 		}
+		if( $@ ) {
+			warn "Internal error occurred: $@\n";
+		}
 	}
 }
 
@@ -163,6 +168,8 @@ sub GetRecord {
 		foreach($rec->header->setSpec) {
 			print "setSpec => ", $_, "\n";
 		}
+		print "\nHeader:\n",
+			$rec->header->dom->toString;
 		print "\nMetadata:\n",
 			$rec->metadata->toString if defined($rec->metadata);
 		print "\nAbout data:\n",
@@ -292,8 +299,6 @@ sub ListRecords {
 		onRecord => $cb,
 	);
 	
-	while(my $rec = $r->next) { }
-
 	print "\nRead a total of $c records\n";
 
 	return if iserror($r);
@@ -310,8 +315,6 @@ sub ListSets {
 	};
 
 	my $r = $h->ListSets(onRecord=>\&cb);
-
-	while($r->next) { }
 
 	return if iserror($r);
 }
