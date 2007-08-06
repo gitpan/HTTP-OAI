@@ -1,3 +1,5 @@
+3.19
+
 3.18
 	- broke apart Metadata from Encapsulation
 	- now uses XML::SAX in Response, rt.cpan.org ticket #27191
