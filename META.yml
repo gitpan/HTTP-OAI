@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               HTTP-OAI
-version:            3.25
+version:            3.27
 abstract:           ~
 author:  []
 license:            unknown
@@ -20,7 +20,7 @@ requires:
     XML::LibXML:       1.6
     XML::LibXML::SAX:  0
     XML::SAX:          0
-    XML::SAX::Base:    1
+    XML::SAX::Base:    1.04
 no_index:
     directory:
         - t

@@ -60,7 +60,8 @@ sub end_element {
 		die ref($self)." Parse error: Empty setSpec\n" unless $hash->{Text};
 		$self->setSpec($hash->{Text});
 	} elsif( $elem eq 'setname' ) {
-		die ref($self)." Parse error: Empty setName\n" unless $hash->{Text};
+		warn ref($self)." Parse error: Empty setName\n", return
+			unless $hash->{Text};
 		$self->setName($hash->{Text});
 	} elsif( $elem eq 'setdescription' ) {
 		$self->SUPER::end_document();
@@ -86,7 +87,7 @@ HTTP::OAI::Set - Encapsulates OAI set XML data
 
 These methods return respectively, the setSpec and setName of the OAI Set.
 
-=item $descs = $s->setDescription([$desc])
+=item @descs = $s->setDescription([$desc])
 
 Returns and optionally adds the list of set descriptions. Returns a reference to an array of L<HTTP::OAI::Description|HTTP::OAI::Description> objects.
 

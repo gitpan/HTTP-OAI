@@ -21,6 +21,9 @@ unless( $@ ) {
 	$ACCEPT = "gzip";
 }
 
+sub delay { shift->_elem( "delay", @_ ) }
+sub last_request_completed { shift->_elem( "last_request_completed", @_ ) }
+
 sub redirect_ok { 1 }
 
 sub request
@@ -30,7 +33,24 @@ sub request
 	if( ref($request) eq 'HASH' ) {
 		$request = HTTP::Request->new(GET => _buildurl(%$request));
 	}
-	return $self->SUPER::request(@_) unless $response;
+
+	my $delay = $self->delay;
+	if( defined $delay )
+	{
+		if( ref($delay) eq "CODE" )
+		{
+			$delay = &$delay( $self->last_request_completed );
+		}
+		select(undef,undef,undef,$delay) if $delay > 0;
+	}
+
+	if( !defined $response )
+	{
+		$response = $self->SUPER::request(@_);
+		$self->last_request_completed( time );
+		return $response;
+	}
+
 	my $parser = XML::LibXML->new(
 		Handler => HTTP::OAI::SAXHandler->new(
 			Handler => $response->headers
@@ -43,23 +63,21 @@ sub request
 	$response->headers->set_handler($response);
 HTTP::OAI::Debug::trace( $response->verb . " " . ref($parser) . "->parse_chunk()" );
 	my $r;
-	if( $USE_EVAL ) {
-		eval {
-			$r = $self->SUPER::request($request,sub {
-				$self->lwp_callback( $parser, @_ )
-			});
-			$self->lwp_endparse( $parser );
-		};
-	} else {
+	{
+		local $SIG{__DIE__};
 		$r = $self->SUPER::request($request,sub {
 			$self->lwp_callback( $parser, @_ )
 		});
-		$self->lwp_endparse( $parser );
+		$self->lwp_endparse( $parser ) if $r->is_success;
 	}
 	if( defined($r) && defined($r->headers->header( 'Client-Aborted' )) && $r->headers->header( 'Client-Aborted' ) eq 'die' )
 	{
-		$r->code(500);
-		$r->message( 'An error occurred while parsing: ' . $r->headers->header( 'X-Died' ));
+		my $err = $r->headers->header( 'X-Died' );
+		if( $err !~ /^done\n/ )
+		{
+			$r->code(500);
+			$r->message( 'An error occurred while parsing: ' . $err );
+		}
 	}
 
 	$response->headers->set_handler(undef);
@@ -72,6 +90,7 @@ HTTP::OAI::Debug::trace( $response->verb . " " . ref($parser) . "->parse_chunk()
 
 	# OAI retry-after
 	if( defined($r) && $r->code == 503 && defined(my $timeout = $r->headers->header('Retry-After')) ) {
+		$self->last_request_completed( time );
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
 			warn ref($self)."::request (retry-after) Given up requesting after 10 retries\n";
@@ -86,6 +105,7 @@ HTTP::OAI::Debug::trace( "Waiting $timeout seconds" );
 		return $self->request($request,undef,undef,undef,$response);
 	# Got an empty response
 	} elsif( defined($r) && $r->is_success && $cnt_len == 0 ) {
+		$self->last_request_completed( time );
 		if( $self->{recursion}++ > 10 ) {
 			$self->{recursion} = 0;
 			warn ref($self)."::request (empty response) Given up requesting after 10 retries\n";
@@ -117,6 +137,9 @@ HTTP::OAI::Debug::trace( "Retrying on empty response" );
 	# Copy original $request => OAI $response to allow easy
 	# access to the requested URL
 	$response->request($request);
+
+	$self->last_request_completed( time );
+
 	$response;
 }
 
@@ -289,5 +312,9 @@ OAI-PMH related options:
 =item $str = $ua->url(baseURL=>$baseref, verb=>$verb, ...)
 
 Takes the same arguments as request, but returns the URL that would be requested.
+
+=item $time_d = $ua->delay( $time_d )
+
+Return and optionally set a time (in seconds) to wait between requests. $time_d may be a CODEREF.
 
 =back
